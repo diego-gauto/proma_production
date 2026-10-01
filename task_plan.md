@@ -8,10 +8,10 @@ Inicializar el monorepo de Proma Production y dejar lista la base de trabajo loc
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0.1 Git, GitHub y reglas de trabajo | partial | Ramas locales `main`, `develop` y `etapa/0-setup-monorepo` confirmadas. `origin` configurado en GitHub. Falta publicar/confirmar ramas remotas `main` y `develop` y proteccion/regla de PR. |
+| 0.1 Git, GitHub y reglas de trabajo | complete | Ramas locales y remotas `main`, `develop` y `etapa/0-setup-monorepo` confirmadas. `origin` configurado en GitHub. Regla operativa de trabajar desde `develop` y volver por PR/merge documentada. |
 | 0.2 Repositorio monorepo y estructura base | complete | Monorepo con `backend/`, `frontend/`, `docs/`, workspace pnpm, READMEs y `.env.example`. Backend y frontend compilan. |
 | 0.3 Base local y primera migracion | complete | PostgreSQL 16 en Docker Compose, TypeORM con `synchronize:false`, validacion de env, migracion dummy y scripts `migration:run`/`migration:revert` verificados. |
-| 0.4 Verificacion local end-to-end | complete | Postgres, backend y frontend levantan localmente. Smoke HTTP documentado y verificado. |
+| 0.4 Verificacion local end-to-end | complete | Postgres, backend y frontend levantan localmente. Smoke HTTP documentado y verificado. Fase 0 lista para avanzar a Fase 1. |
 
 ## Decisions
 
@@ -58,3 +58,4 @@ Inicializar el monorepo de Proma Production y dejar lista la base de trabajo loc
 | Smoke backend | OK: `GET http://localhost:3001/api/v1` -> `Hello World!` |
 | Smoke CORS | OK: `Access-Control-Allow-Origin: http://localhost:3000` |
 | Smoke frontend | OK: `HEAD http://localhost:3000` -> `200 OK` |
+| Remote branches | OK: `main`, `develop` y `etapa/0-setup-monorepo` publicadas en GitHub |

@@ -43,3 +43,7 @@
 - Configurado `origin` como `https://github.com/diego-gauto/proma_production.git`.
 - Verificacion: `git remote --verbose` muestra `origin` para fetch/push.
 - Verificacion: `git ls-remote --heads origin` responde OK pero no lista ramas remotas; queda pendiente publicar ramas base `main` y `develop`.
+- Commit de cierre de Fase 0 creado: `cf55dd9 chore: complete phase 0 setup`.
+- Integrada la rama `etapa/0-setup-monorepo` a `develop` con fast-forward.
+- Publicadas en GitHub las ramas `main`, `develop` y `etapa/0-setup-monorepo`.
+- Etapa 0.1 cerrada operativamente: ramas base disponibles en remoto y regla de trabajo documentada.

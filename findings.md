@@ -15,7 +15,7 @@
 
 ## 2026-10-01
 
-- El repo ahora tiene remoto Git `origin` apuntando a `https://github.com/diego-gauto/proma_production.git`. Para cerrar 0.1 en GitHub falta publicar/confirmar `main` y `develop` remotas y protecciones/regla de PR.
+- El repo ahora tiene remoto Git `origin` apuntando a `https://github.com/diego-gauto/proma_production.git`; `main`, `develop` y `etapa/0-setup-monorepo` ya fueron publicadas en GitHub.
 - `proma-postgres` ya existia y estaba running/healthy en Docker.
 - El sandbox bloquea conexiones TCP a `localhost` y al daemon Docker para algunos comandos; las verificaciones de DB/servidores requieren permiso escalado.
 - El CLI `typeorm-ts-node-commonjs ... migration:*` quedo colgado durante la verificacion; los runners TS explicitos (`runMigrations`, `undoLastMigration`) funcionan correctamente.
