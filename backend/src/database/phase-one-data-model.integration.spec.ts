@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { DataSource, DataSourceOptions, IsNull } from 'typeorm';
 import { ArticleDecorationPart } from '../modules/articles/entities/article-decoration-part.entity';
 import { ArticleFabric } from '../modules/articles/entities/article-fabric.entity';
@@ -45,6 +46,7 @@ describe('phase one data model', () => {
     schemaName = `phase_one_${randomUUID().replace(/-/g, '')}`;
     process.env.ADMIN_INITIAL_FULL_NAME = 'Admin Inicial';
     process.env.ADMIN_INITIAL_EMAIL = `admin-initial-${randomUUID()}@proma.test`;
+    process.env.ADMIN_INITIAL_PASSWORD = 'Password-Inicial-123';
     process.env.ADMIN_INITIAL_PASSWORD_HASH = 'hash-from-env-for-test';
     const options = dataSource.options as DataSourceOptions & {
       type: 'postgres';
@@ -300,6 +302,9 @@ describe('phase one data model', () => {
 
     expect(admin.fullName).toBe('Admin Inicial');
     expect(admin.role).toBe(UserRole.ADMIN);
-    expect(admin.passwordHash).toBe('hash-from-env-for-test');
+    expect(admin.passwordHash).not.toBe('Password-Inicial-123');
+    expect(
+      await bcrypt.compare('Password-Inicial-123', admin.passwordHash),
+    ).toBe(true);
   });
 });
