@@ -74,9 +74,10 @@ Login individual por usuario (no es login compartido por sector), aunque en la p
 ## 2. Stack Tecnológico Detallado
 
 ### 2.1 Frontend
-- **Next.js 15.x** (App Router) — última estable al momento de desarrollo, verificar con `npm view next version`.
+- **Next.js 15.x** (App Router) — última estable al momento de desarrollo, verificar con `pnpm view next version`.
 - **TypeScript 5.x** (`strict: true`)
 - **CSS Modules** — un `.module.css` por componente, cero librerías de UI/CSS.
+- **Package manager**: `pnpm` 10.x para instalar dependencias, correr scripts y generar `pnpm-lock.yaml`.
 - **Fetching**: `fetch` nativo envuelto en cliente propio (`src/lib/api`), sin librerías externas de data-fetching en el MVP (se puede evaluar TanStack Query en fase 2).
 - **Mobile-first**: los formularios de sector (marcar inicio/fin de etapa) se diseñan primero para uso desde celular/tablet en planta.
 
@@ -105,7 +106,7 @@ Login individual por usuario (no es login compartido por sector), aunque en la p
 # Backend (.env)
 NODE_ENV=development
 PORT=3001
-DATABASE_URL=postgresql://user:pass@localhost:5432/produccion_textil
+DATABASE_URL=postgresql://user:pass@localhost:55432/produccion_textil
 JWT_SECRET=<random-64-chars>
 JWT_EXPIRES_IN=8h
 CORS_ORIGIN=http://localhost:3000
@@ -1245,10 +1246,10 @@ El cliente ya cuenta con un **VPS Hostinger KVM2** con **Dokploy**, **n8n** y un
 # backend/Dockerfile
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-alpine
 WORKDIR /app
@@ -1263,10 +1264,10 @@ CMD ["node", "dist/main.js"]
 # frontend/Dockerfile
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-alpine
 WORKDIR /app
@@ -1276,14 +1277,14 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 COPY --from=build /app/next.config.js ./
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
 ```
 
 ### 9.4 CI/CD básico
 - Dokploy soporta deploy por webhook de GitHub — configurar 2 apps (front/back) con auto-deploy desde la rama de producción (`main` o la que se defina para deploy), precedido idealmente por un pipeline de GitHub Actions que corra lint + tests antes de permitir el merge desde `develop` (ver checklist de tests por etapa en §10).
 
 ### 9.5 Migraciones en producción
-- Las migraciones de TypeORM se corren como paso explícito del deploy (`npm run migration:run`), **nunca automáticamente al bootear la app** en producción, para evitar condiciones de carrera si hay más de una instancia arrancando.
+- Las migraciones de TypeORM se corren como paso explícito del deploy (`pnpm run migration:run`), **nunca automáticamente al bootear la app** en producción, para evitar condiciones de carrera si hay más de una instancia arrancando.
 
 ---
 
@@ -1347,7 +1348,7 @@ CMD ["npm", "start"]
 
 **Regla general aplicable a TODAS las etapas del plan de implementación**: una etapa del plan solo se considera finalizada cuando:
 1. El código compila sin errores (`tsc --noEmit` en ambos proyectos).
-2. Los tests automatizados definidos para esa etapa **pasan en su totalidad** (`npm run test` y, si aplica, `npm run test:e2e`).
+2. Los tests automatizados definidos para esa etapa **pasan en su totalidad** (`pnpm run test` y, si aplica, `pnpm run test:e2e`).
 3. Existe evidencia manual de que la funcionalidad fue probada end-to-end (request real vía Swagger/Postman o interacción real en el navegador, no solo tests unitarios).
 4. No quedan `TODO` ni código muerto relacionado a esa etapa.
 5. Las migraciones nuevas corren limpio sobre una base vacía (`migration:run` desde cero) y son reversibles (`migration:revert` no rompe nada).

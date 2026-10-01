@@ -6,16 +6,16 @@
 
 ```bash
 # Buscar skills por palabra clave
-npx skills find nestjs
+pnpm dlx skills find nestjs
 
 # Ver contenido de una skill antes de instalar
 bunx skills add <owner>/<repo> --list
 
 # Instalar una skill puntual a Claude Code
-npx skills add <owner>/<repo> --skill <nombre-skill>
+pnpm dlx skills add <owner>/<repo> --skill <nombre-skill>
 
 # Listar lo ya instalado
-npx skills list
+pnpm dlx skills list
 ```
 
 Las skills instaladas quedan en `~/.claude/skills/` (personal) o `.claude/skills/` (a nivel de proyecto — **recomendado para este repo**, así queda versionado y disponible para todo el equipo/agentes que trabajen sobre él).
@@ -42,7 +42,7 @@ Las skills instaladas quedan en `~/.claude/skills/` (personal) o `.claude/skills
 
 | Skill | Para qué sirve | Prioridad |
 |---|---|---|
-| Skill de monorepo / workspace (buscar `monorepo` o `pnpm workspace` en skills.sh si se decide usar workspaces) | Útil si el monorepo empieza a compartir scripts, tipos o paquetes entre `backend/` y `frontend/`. No instalar al inicio si la estructura se mantiene simple con dos proyectos npm separados dentro del mismo repo. | Media |
+| Skill de monorepo / workspace (buscar `monorepo` o `pnpm workspace` en skills.sh si se decide usar workspaces) | Útil si el monorepo empieza a compartir scripts, tipos o paquetes entre `backend/` y `frontend/`. No instalar al inicio si la estructura se mantiene simple con dos proyectos pnpm separados dentro del mismo repo. | Media |
 | `skill-creator` (anthropics — **ya disponible en este entorno**) | Si a mitad de proyecto surge un patrón repetitivo propio (ej: "cómo armar un módulo ABM completo siguiendo la convención de este repo"), se puede empaquetar como skill propia del proyecto en vez de repetir instrucciones cada vez | Media |
 | `code-simplifier` (mencionada en varios rankings de skills.sh) | Limpieza de código recién escrito sin cambiar comportamiento — útil para pasar de borrador funcional a código prolijo antes de cerrar cada etapa del plan | Media |
 | Skill de revisión de PR / checklist de calidad (buscar `pr review checklist`) | Complementa el AGENTS.md: una segunda pasada automatizada antes de dar una etapa por cerrada | Baja–Media |
@@ -75,7 +75,7 @@ Si una skill de terceros sugiere un patrón que contradice `AGENTS.md` o el PRD 
 Para no sobrecargar el contexto desde el día uno, se recomienda instalar solamente esto al iniciar la Fase 0 del plan de implementación, y sumar el resto solo si hace falta en el camino:
 
 ```bash
-npx skills add agentivecity-skillfactory/nestjs-typeorm-integration --skill nestjs-typeorm-integration
+pnpm dlx skills add agentivecity-skillfactory/nestjs-typeorm-integration --skill nestjs-typeorm-integration
 ```
 
 El resto de las skills de la tabla se evalúan e instalan bajo demanda, cuando la fase del plan de implementación efectivamente las necesite (ej: instalar una skill de testing e2e recién al llegar a la Fase 2, no antes).

@@ -30,6 +30,7 @@ Si una tarea pedida no está cubierta por el PRD o lo contradice, **el agente de
 |---|---|
 | Desarrollo local | El proyecto debe funcionar localmente completo: PostgreSQL en Docker Compose, backend NestJS en `localhost:3001` y frontend Next.js en `localhost:3000`. Los cambios se suben a GitHub por etapas cerradas. |
 | Repositorio | Se usa monorepo con `backend/`, `frontend/` y `docs/` en una misma raíz, salvo decisión explícita posterior del usuario. |
+| Package manager | Usar `pnpm` para instalar dependencias, correr scripts y generar lockfiles. Prohibido usar `npm install` o commitear `package-lock.json`. |
 | Frontend | Next.js (App Router) + TypeScript + CSS Modules. **Prohibido** usar Tailwind, Bootstrap, Material UI, styled-components, o cualquier librería de componentes UI. |
 | Backend | NestJS + TypeScript + TypeORM + PostgreSQL. |
 | Estilos | Cada componente React tiene su propio `.module.css` en la misma carpeta. Nunca estilos inline (`style={{}}`) salvo casos dinámicos imposibles de resolver por clase (documentar por qué si se usa). |
@@ -71,9 +72,9 @@ Estas reglas vienen del PRD §3.4 y son las más fáciles de romper por error. E
 
 - **Ninguna etapa del plan de implementación se marca como completada sin que sus tests pasen.** Ver criterio completo en PRD §11.
 - Antes de dar por terminada una tarea, el agente debe correr:
-  1. `npm run build` (o `tsc --noEmit`) en el proyecto tocado.
-  2. `npm run test` del proyecto tocado.
-  3. Si la tarea tocó un endpoint, `npm run test:e2e` del backend si existe test e2e relacionado.
+  1. `pnpm run build` (o `tsc --noEmit`) en el proyecto tocado.
+  2. `pnpm run test` del proyecto tocado.
+  3. Si la tarea tocó un endpoint, `pnpm run test:e2e` del backend si existe test e2e relacionado.
 - Si un test falla, el agente **arregla el código o el test según corresponda** — nunca comenta o borra un test para que "pase" sin resolver la causa real, salvo que el test esté objetivamente mal escrito (y en ese caso lo explicita en la respuesta).
 - Toda nueva regla de negocio de la sección 3 de este documento (invariantes del modelo de datos) debe tener al menos un test unitario que la cubra.
 

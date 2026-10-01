@@ -29,7 +29,7 @@
 - Estructura de carpetas según PRD §4.1 y §4.2 (carpetas vacías con `.gitkeep` donde aplique).
 - `.env.example` en ambos proyectos.
 - README breve en cada proyecto con comandos de arranque.
-**Tests**: `npm run build` corre sin errores en ambos proyectos. Backend levanta en `localhost:3001` con el endpoint default de Nest. Frontend levanta en `localhost:3000` con la página default de Next.
+**Tests**: `pnpm run build` corre sin errores en ambos proyectos. Backend levanta en `localhost:3001` con el endpoint default de Nest. Frontend levanta en `localhost:3000` con la página default de Next.
 
 ### Etapa 0.3 — Conexión a base de datos y primera migración
 **Objetivo**: backend conectado a Postgres, con TypeORM configurado y la primera migración corriendo.
@@ -38,7 +38,7 @@
 - Configurar `TypeOrmModule.forRootAsync` leyendo `DATABASE_URL`.
 - `env.validation.ts` con `class-validator` validando variables obligatorias al boot.
 - Migración inicial vacía de prueba (crear y dropear una tabla dummy) para confirmar el pipeline de migraciones.
-**Tests**: `docker compose up -d postgres` levanta la base local. `npm run migration:run` y `npm run migration:revert` corren limpio contra la base local de desarrollo. La app bootea sin errores de conexión.
+**Tests**: `docker compose up -d postgres` levanta la base local en `localhost:55432`. `pnpm run migration:run` y `pnpm run migration:revert` corren limpio contra la base local de desarrollo. La app bootea sin errores de conexión.
 
 ### Etapa 0.4 — Verificación local end-to-end del esqueleto
 **Objetivo**: confirmar que base, backend y frontend funcionan juntos localmente antes de avanzar a modelo de datos.
