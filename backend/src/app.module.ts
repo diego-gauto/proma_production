@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import databaseConfig from './config/database.config';
 import { validate } from './config/env.validation';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -16,8 +17,10 @@ import { validate } from './config/env.validation';
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => configService.getOrThrow('database'),
+      useFactory: (configService: ConfigService) =>
+        configService.getOrThrow('database'),
     }),
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
