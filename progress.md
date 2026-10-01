@@ -47,3 +47,18 @@
 - Integrada la rama `etapa/0-setup-monorepo` a `develop` con fast-forward.
 - Publicadas en GitHub las ramas `main`, `develop` y `etapa/0-setup-monorepo`.
 - Etapa 0.1 cerrada operativamente: ramas base disponibles en remoto y regla de trabajo documentada.
+
+## 2026-10-01 - correccion de env
+
+- Corregidos `.env.example` de raiz, backend y frontend para que contengan solo nombres de claves sin valores.
+- Creados `.env.local` locales con valores de desarrollo; quedan ignorados por Git.
+- Backend actualizado para cargar `.env.local` antes de `.env` en Nest, DataSource y runners auxiliares.
+- README actualizado para usar `docker compose --env-file .env.local`.
+- Verificacion: `git check-ignore` confirma que `.env.local`, `backend/.env.local` y `frontend/.env.local` estan ignorados.
+- Verificacion: `pnpm --dir backend run build` OK.
+- Verificacion: `pnpm --dir backend run test` OK.
+- Verificacion: `pnpm --dir backend run test:e2e` OK.
+- Verificacion: `pnpm --dir frontend run build` OK; Next muestra `.env.local`.
+- Verificacion: `pnpm --dir frontend run lint` OK.
+- Verificacion: `docker compose --env-file .env.local up -d postgres` OK.
+- Verificacion: `pnpm --dir backend run migration:run` OK cargando `.env.local`.

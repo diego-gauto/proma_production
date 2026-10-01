@@ -23,6 +23,6 @@ El backend corre localmente en `http://localhost:3001`.
 
 ## Variables de entorno
 
-Crear `backend/.env` desde `backend/.env.example`.
+Crear `backend/.env.local` desde `backend/.env.example`.
 
 La base local esperada para desarrollo usa PostgreSQL en `localhost:55432`.

@@ -22,3 +22,4 @@
 - `migration:revert` emite un warning de `pg` sobre `client.query()` concurrente, pero la migracion revierte correctamente.
 - El build frontend del scaffold default fallaba con "webpack errors" sin detalle; al quitar `next/font/google` y assets promocionales, `next build` pasa.
 - El e2e backend exponia que `PORT` y `BOTTLENECK_THRESHOLD_DAYS` no se convertian de string a number en `env.validation.ts`; se corrigio con `@Type(() => Number)` y se agrego test unitario.
+- Regla de env corregida: los `.env.example` versionados no deben tener valores; los valores locales viven en `.env.local`, que esta ignorado por Git.

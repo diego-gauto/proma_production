@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-config();
+config({ path: ['.env.local', '.env'] });
 import dataSource from './src/database/data-source';
 
 async function main() {

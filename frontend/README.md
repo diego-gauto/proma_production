@@ -19,7 +19,7 @@ El frontend corre localmente en `http://localhost:3000`.
 
 ## Variables de entorno
 
-Crear `frontend/.env` o `frontend/.env.local` desde `frontend/.env.example`:
+Crear `frontend/.env.local` desde `frontend/.env.example`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1

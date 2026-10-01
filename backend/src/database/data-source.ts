@@ -3,7 +3,7 @@ import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { InitialDummyMigration1724457600000 } from './migrations/1724457600000-InitialDummyMigration';
 
-config();
+config({ path: ['.env.local', '.env'] });
 
 export default new DataSource({
   type: 'postgres',

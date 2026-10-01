@@ -31,7 +31,7 @@ Fase 0 deja funcionando localmente:
 - Frontend en `http://localhost:3000`.
 
 ```bash
-docker compose up -d postgres
+docker compose --env-file .env.local up -d postgres
 pnpm --dir backend run migration:run
 pnpm --dir backend run start:dev
 pnpm --dir frontend run dev
