@@ -1,0 +1,25 @@
+export enum OrderStatus {
+  ACTIVA = 'ACTIVA',
+  EN_ARREGLO = 'EN_ARREGLO',
+  FINALIZADA = 'FINALIZADA',
+  CANCELADA = 'CANCELADA',
+}
+
+export enum PartStatus {
+  PENDIENTE = 'PENDIENTE',
+  EN_PROCESO = 'EN_PROCESO',
+  DIVIDIDA = 'DIVIDIDA',
+  REINTEGRADA = 'REINTEGRADA',
+  FINALIZADA = 'FINALIZADA',
+}
+
+export enum PartSplitMode {
+  LOTE = 'LOTE',
+  COMPONENTE = 'COMPONENTE',
+}
+
+export enum SupplyCompleteness {
+  COMPLETO = 'COMPLETO',
+  PARCIAL = 'PARCIAL',
+  FALTANTE = 'FALTANTE',
+}
