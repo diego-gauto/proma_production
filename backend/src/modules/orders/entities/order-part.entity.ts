@@ -33,6 +33,9 @@ export class OrderPart {
   @JoinColumn({ name: 'parent_part_id' })
   parentPart?: OrderPart | null;
 
+  @Column({ name: 'parent_part_id', type: 'uuid', nullable: true })
+  parentPartId?: string | null;
+
   @OneToMany(() => OrderPart, (part) => part.parentPart)
   children!: OrderPart[];
 
@@ -81,6 +84,9 @@ export class OrderPart {
   @JoinColumn({ name: 'recombined_into_part_id' })
   recombinedIntoPart?: OrderPart | null;
 
+  @Column({ name: 'recombined_into_part_id', type: 'uuid', nullable: true })
+  recombinedIntoPartId?: string | null;
+
   @ManyToOne(() => Stage, (stage) => stage.currentParts, { nullable: true })
   @JoinColumn({ name: 'current_stage_id' })
   currentStage?: Stage | null;
@@ -102,7 +108,7 @@ export class OrderPart {
   @OneToMany(() => PartStageEvent, (event) => event.orderPart)
   events!: PartStageEvent[];
 
-  @OneToMany(() => PartSupply, (supply) => supply.orderPart)
+  @OneToMany(() => PartSupply, (supply) => supply.orderPart, { cascade: ['insert', 'update'] })
   supplies!: PartSupply[];
 
   @OneToMany(() => Notification, (notification) => notification.orderPart)

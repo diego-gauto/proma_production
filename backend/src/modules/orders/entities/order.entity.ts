@@ -9,9 +9,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Article } from '../../articles/entities/article.entity';
+import { Fabric } from '../../catalog/entities/fabric.entity';
+import { SizeCurve } from '../../catalog/entities/size-curve.entity';
 import { Client } from '../../clients/entities/client.entity';
 import { Notification } from '../../notifications/entities/notification.entity';
 import { User } from '../../users/entities/user.entity';
+import { Workshop } from '../../workshops/entities/workshop.entity';
 import { OrderStatus } from './order.enums';
 import { OrderPart } from './order-part.entity';
 import { OrderRequestedItem } from './order-requested-item.entity';
@@ -34,6 +37,18 @@ export class Order {
   @ManyToOne(() => Article, (article) => article.orders, { nullable: false })
   @JoinColumn({ name: 'article_id' })
   article!: Article;
+
+  @ManyToOne(() => Fabric, { nullable: false })
+  @JoinColumn({ name: 'fabric_id' })
+  fabric!: Fabric;
+
+  @ManyToOne(() => SizeCurve, { nullable: false })
+  @JoinColumn({ name: 'size_curve_id' })
+  sizeCurve!: SizeCurve;
+
+  @ManyToOne(() => Workshop, { nullable: true })
+  @JoinColumn({ name: 'initial_workshop_id' })
+  initialWorkshop?: Workshop | null;
 
   @Column({
     name: 'status',
