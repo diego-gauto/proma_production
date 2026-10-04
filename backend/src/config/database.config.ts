@@ -1,5 +1,10 @@
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { InitialDummyMigration1724457600000 } from '../database/migrations/1724457600000-InitialDummyMigration';
+import { CreatePhaseOneDataModel1724544000000 } from '../database/migrations/1724544000000-CreatePhaseOneDataModel';
+import { SeedInitialAdminUser1724630400000 } from '../database/migrations/1724630400000-SeedInitialAdminUser';
+import { RectifyPhaseThreeMasters1791055000000 } from '../database/migrations/1791055000000-RectifyPhaseThreeMasters';
+import { FixPhaseThreeLegacyColumns1791055100000 } from '../database/migrations/1791055100000-FixPhaseThreeLegacyColumns';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -7,6 +12,13 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   autoLoadEntities: true,
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: false,
+  migrations: [
+    InitialDummyMigration1724457600000,
+    CreatePhaseOneDataModel1724544000000,
+    SeedInitialAdminUser1724630400000,
+    RectifyPhaseThreeMasters1791055000000,
+    FixPhaseThreeLegacyColumns1791055100000,
+  ],
   migrationsRun: false,
   logging: process.env.NODE_ENV === 'development',
 }));

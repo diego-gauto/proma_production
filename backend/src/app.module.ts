@@ -5,7 +5,13 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import databaseConfig from './config/database.config';
 import { validate } from './config/env.validation';
+import { ArticlesModule } from './modules/articles/articles.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
+import { ClientsModule } from './modules/clients/clients.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { UsersModule } from './modules/users/users.module';
+import { WorkshopsModule } from './modules/workshops/workshops.module';
 
 @Module({
   imports: [
@@ -21,6 +27,12 @@ import { AuthModule } from './modules/auth/auth.module';
         configService.getOrThrow('database'),
     }),
     AuthModule,
+    ClientsModule,
+    WorkshopsModule,
+    CatalogModule,
+    ArticlesModule,
+    UsersModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

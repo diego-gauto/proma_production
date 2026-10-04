@@ -1,0 +1,40 @@
+.tableWrap {
+  overflow-x: hidden;
+  border: 1px solid #343156;
+  border-radius: 10px;
+  background: #202039;
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  color: #f4f4ff;
+}
+
+.table th,
+.table td {
+  overflow: hidden;
+  padding: 9px 10px;
+  border-bottom: 1px solid #343156;
+  text-align: left;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table th {
+  background: #2a2259;
+  color: #e5e2ff;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.empty {
+  color: #9da3d3;
+  text-align: center;
+}

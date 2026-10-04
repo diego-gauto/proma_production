@@ -2,18 +2,16 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Stage } from '../../catalog/entities/stage.entity';
 import { Notification } from '../../notifications/entities/notification.entity';
 import { Order } from '../../orders/entities/order.entity';
 import { PartStageEvent } from '../../orders/entities/part-stage-event.entity';
 import { PartSupply } from '../../orders/entities/part-supply.entity';
 import { UserRole } from './user.enums';
+import { UserPermission } from './user-permission.entity';
 
 @Entity('users')
 export class User {
@@ -38,10 +36,6 @@ export class User {
   })
   role!: UserRole;
 
-  @ManyToOne(() => Stage, (stage) => stage.users, { nullable: true })
-  @JoinColumn({ name: 'stage_id' })
-  stage?: Stage | null;
-
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
@@ -50,6 +44,11 @@ export class User {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
+
+  @OneToMany(() => UserPermission, (permission) => permission.user, {
+    cascade: ['insert', 'update'],
+  })
+  permissions!: UserPermission[];
 
   @OneToMany(() => Order, (order) => order.createdBy)
   createdOrders!: Order[];

@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "echo \"No frontend tests configured yet\""
+    "test": "rm -rf /tmp/proma-frontend-test && tsc src/lib/api/client.ts src/lib/api/client.test.ts src/lib/formatters/master-formatters.ts src/lib/formatters/master-formatters.test.ts --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop --outDir /tmp/proma-frontend-test && node --test /tmp/proma-frontend-test/api/client.test.js /tmp/proma-frontend-test/formatters/master-formatters.test.js"
   },
   "dependencies": {
     "react": "19.1.0",

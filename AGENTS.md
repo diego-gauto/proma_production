@@ -4,6 +4,8 @@
 
 ## 0. Documentos de referencia obligatoria
 
+Antes de empezar **cualquier tarea solicitada por el usuario**, incluso tareas chicas o urgentes, el agente debe leer este `AGENTS.md` completo en la sesión actual. No alcanza con recordarlo de contexto previo ni con haberlo leído en otra sesión. Si por cualquier motivo no puede leerlo, debe detenerse y reportarlo antes de tocar archivos o ejecutar cambios.
+
 Antes de implementar cualquier funcionalidad, el agente debe haber leído:
 1. `01-Vision-Proyecto.md` — contexto de negocio.
 2. `02-PRD.md` — fuente de verdad técnica (modelo de datos, endpoints, reglas de negocio).
@@ -71,10 +73,12 @@ Estas reglas vienen del PRD §3.4 y son las más fáciles de romper por error. E
 ## 6. Testing — no negociable
 
 - **Ninguna etapa del plan de implementación se marca como completada sin que sus tests pasen.** Ver criterio completo en PRD §11.
+- **Nunca se entrega trabajo sin verificación funcional.** Antes de informar que una tarea está terminada, el agente debe comprobar que lo que modificó funciona realmente en el entorno local correspondiente. No alcanza con que compile: si tocó frontend debe abrir o consultar la pantalla/ruta afectada y confirmar que responde sin error; si tocó backend debe llamar el endpoint o flujo afectado con datos válidos; si tocó base de datos debe consultar que los datos/migración esperados existan; si tocó integración entre capas debe verificar el flujo completo.
 - Antes de dar por terminada una tarea, el agente debe correr:
   1. `pnpm run build` (o `tsc --noEmit`) en el proyecto tocado.
   2. `pnpm run test` del proyecto tocado.
   3. Si la tarea tocó un endpoint, `pnpm run test:e2e` del backend si existe test e2e relacionado.
+- Si la verificación funcional no puede ejecutarse por una causa externa o de entorno, el agente **no puede decir que está terminado como si estuviera probado**. Debe reportar explícitamente qué no pudo verificar, por qué, y cuál es el riesgo.
 - Si un test falla, el agente **arregla el código o el test según corresponda** — nunca comenta o borra un test para que "pase" sin resolver la causa real, salvo que el test esté objetivamente mal escrito (y en ese caso lo explicita en la respuesta).
 - Toda nueva regla de negocio de la sección 3 de este documento (invariantes del modelo de datos) debe tener al menos un test unitario que la cubra.
 

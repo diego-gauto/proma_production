@@ -5,7 +5,6 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Article } from '../../articles/entities/article.entity';
 import { SizeSequenceType } from './catalog.enums';
 import { SizeCurveValue } from './size-curve-value.entity';
 
@@ -32,7 +31,4 @@ export class SizeCurve {
     cascade: ['insert', 'update'],
   })
   values!: SizeCurveValue[];
-
-  @OneToMany(() => Article, (article) => article.sizeCurve)
-  articles!: Article[];
 }
