@@ -1,19 +1,26 @@
-# Progress - Etapa 6
+# Progress - Etapa 8
 
-- Rama creada: `etapa/6-notificaciones` desde `develop`.
-- Lectura obligatoria completa: AGENTS + Vision + PRD + Plan.
+- Leido `AGENTS.md` completo.
+- Leidos documentos obligatorios: Vision, PRD completo y Plan de Implementacion.
 - Skills usadas: brainstorming, test-driven-development, planning-with-files.
-- Relevado backend: existe entidad/tabla `notifications`, pero no hay modulo, servicio ni controlador.
-- Relevado frontend: no hay API ni UI de notificaciones; `page.tsx` concentra la pantalla principal.
-- Tests rojos confirmados: unitario falla por servicio inexistente; e2e falla con 404 en rutas `/notifications`.
-- Implementado `NotificationsModule`, `NotificationsService`, `NotificationsController` y DTO de query; registrado en `AppModule`.
-- Agregado cliente API frontend `notifications.api.ts` y test unitario de rutas autenticadas.
-- Integrada campanita de notificaciones en `page.tsx`, con listado, marcar una como leida, marcar todas y polling cada 60s.
-- Frontend test: PASS.
-- Frontend build: PASS.
+- `git status` en `main` no mostro cambios locales.
+- Cambiada rama a `develop` y creada `etapa/8-hardening-demo-deploy`.
+- Relevado arbol de backend/frontend/tests/migraciones.
+- Agregado test e2e rojo para permisos de split/recombine; confirmado fallo 201 vs 403.
+- Implementado control de permisos en `split` y `recombine` con `FORZAR_CAMBIO` sectorial/global.
+- `orders.e2e-spec.ts` focalizado: PASS.
+- Agregado test rojo de seed demo por modulo inexistente.
+- Implementado `seedDemoData`, `run-demo-seed.ts` y script `seed:demo`.
+- `demo-seed.spec.ts` focalizado: PASS.
+- Agregados Dockerfiles backend/frontend, `.dockerignore`, checklist deploy MVP y matriz de permisos.
+- Ajustada tabla principal en mobile para evitar corte de datos por overflow oculto.
 - Backend build: PASS.
-- Backend unit focalizado notificaciones: PASS.
-- Backend e2e focalizado notificaciones: PASS.
-- Backend unit suite completa: PASS.
-- Backend e2e suite completa: PASS.
+- Frontend build: PASS.
+- Frontend test: PASS.
+- Backend test/e2e via `pnpm run ... -- --runInBand`: fallo por pasaje de argumentos, no por suite; se reintenta con `pnpm exec jest`.
+- Backend unit suite completa con `pnpm --dir backend exec jest --runInBand`: PASS.
+- Backend e2e suite completa con `pnpm --dir backend exec jest --config test/jest-e2e.json --runInBand`: PASS.
+- Docker build backend `proma-backend:stage8`: PASS.
+- Docker build frontend `proma-frontend:stage8`: PASS.
+- `pnpm --dir backend run seed:demo`: PASS contra base local.
 - Frontend smoke `curl -I http://localhost:3002/`: 200 OK.

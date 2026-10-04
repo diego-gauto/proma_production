@@ -1,0 +1,15 @@
+.git
+node_modules
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/.next
+coverage
+.env
+.env.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+npm-debug.log
+pnpm-debug.log

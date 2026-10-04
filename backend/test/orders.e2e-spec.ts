@@ -206,6 +206,37 @@ describe('Orders (e2e)', () => {
     return login.body.accessToken as string;
   }
 
+  async function createGlobalPermissionToken(
+    label: string,
+    actions: PermissionAction[],
+  ): Promise<string> {
+    const userEmail = `${label}-${suffix}@proma.test`;
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await dataSource.query(
+      `
+        INSERT INTO users (full_name, email, password_hash, role)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `,
+      [`Usuario ${label}`, userEmail, passwordHash, UserRole.USER],
+    );
+    for (const action of actions) {
+      await dataSource.query(
+        `
+          INSERT INTO user_permissions (user_id, sector_code, action)
+          VALUES ($1, NULL, $2)
+        `,
+        [user[0].id, action],
+      );
+    }
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: userEmail, password })
+      .expect(201);
+    return login.body.accessToken as string;
+  }
+
 
   it('creates an order with real order fabric, curve, requested items, root part and supply checklist', async () => {
     const fixture = await createOrderFixture('Crear');
@@ -506,6 +537,107 @@ describe('Orders (e2e)', () => {
     expect(filtered.body).toEqual([
       expect.objectContaining({ id: recombined.body.id }),
     ]);
+  });
+
+  it('protects split and recombine with operational permissions', async () => {
+    const fixture = await createOrderFixture('PermisosSplit');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-SPLIT-PERM`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 10 },
+        ],
+      })
+      .expect(201);
+    const rootId = created.body.parts[0].id as string;
+    const corteStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.CORTE],
+    );
+    await dataSource.query(
+      `
+        UPDATE order_parts
+        SET current_stage_id = $1, status = $2
+        WHERE id = $3
+      `,
+      [corteStage[0].id, PartStatus.EN_PROCESO, rootId],
+    );
+    const bordadoToken = await createSectorToken(
+      'bordado-split-denied',
+      SectorCode.BORDADO,
+      [PermissionAction.FORZAR_CAMBIO],
+    );
+    const corteSplitToken = await createSectorToken(
+      'corte-split-allowed',
+      SectorCode.CORTE,
+      [PermissionAction.FORZAR_CAMBIO],
+    );
+    const globalChangeToken = await createGlobalPermissionToken(
+      'produccion-recombine-allowed',
+      [PermissionAction.FORZAR_CAMBIO],
+    );
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${rootId}/split`)
+      .set('Authorization', `Bearer ${bordadoToken}`)
+      .send({
+        splitMode: PartSplitMode.LOTE,
+        subParts: [
+          { quantity: 5, splitReason: 'Lote A' },
+          { quantity: 5, splitReason: 'Lote B' },
+        ],
+      })
+      .expect(403);
+
+    const loteSplit = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${rootId}/split`)
+      .set('Authorization', `Bearer ${corteSplitToken}`)
+      .send({
+        splitMode: PartSplitMode.LOTE,
+        subParts: [
+          { quantity: 5, splitReason: 'Lote A' },
+          { quantity: 5, splitReason: 'Lote B' },
+        ],
+      })
+      .expect(201);
+
+    const componentSplit = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${loteSplit.body[0].id}/split`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        splitMode: PartSplitMode.COMPONENTE,
+        subParts: [
+          { quantity: 5, splitReason: 'Mangas a bordar' },
+          { quantity: 5, splitReason: 'Resto en espera' },
+        ],
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/order-parts/recombine')
+      .set('Authorization', `Bearer ${bordadoToken}`)
+      .send({
+        componentPartIds: componentSplit.body.map((part: { id: string }) => part.id),
+        quantity: 5,
+        note: 'Intento sin permiso del sector padre',
+      })
+      .expect(403);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/order-parts/recombine')
+      .set('Authorization', `Bearer ${globalChangeToken}`)
+      .send({
+        componentPartIds: componentSplit.body.map((part: { id: string }) => part.id),
+        quantity: 5,
+        note: 'Componentes reunificados por permiso global',
+      })
+      .expect(201);
   });
 
   it('starts stages with sector permissions and validates active events and external workshops', async () => {
