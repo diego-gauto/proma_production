@@ -8,6 +8,14 @@ import { Select } from "../components/ui/Select/Select";
 import { Table } from "../components/ui/Table/Table";
 import { isUnauthorizedError, login, LoginResponse } from "../lib/api/client";
 import {
+  DashboardKanbanResponse,
+  DashboardRow,
+  DashboardSummary,
+  getDashboardKanban,
+  getDashboardSummary,
+  listDashboardOrders,
+} from "../lib/api/dashboard.api";
+import {
   ArticleMaster,
   ClientMaster,
   createMaster,
@@ -31,7 +39,6 @@ import {
   createOrder,
   finishStage,
   getOrder,
-  listOrders,
   listStages,
   markOrderRepair,
   OrderSummary,
@@ -56,23 +63,6 @@ type MasterItem =
   | UserMaster;
 type FormState = Record<string, string>;
 type MainView = "orders" | "masters";
-type OrderRow = {
-  id: string;
-  orderCode: string;
-  createdDate: string;
-  client: string;
-  product: string;
-  quantity: number;
-  stage: string;
-  stageEnteredAt: string;
-  daysInStage: string;
-  location: string;
-  trafficLabel: string;
-  trafficTone: "red" | "yellow" | "green";
-  kind: "single" | "splitParent" | "splitChild";
-  orderId: string;
-};
-
 const resources: {
   key: MasterName;
   label: string;
@@ -94,7 +84,9 @@ export default function Home() {
   const [mainView, setMainView] = useState<MainView>("orders");
   const [active, setActive] = useState<MasterName>("clients");
   const [items, setItems] = useState<MasterItem[]>([]);
-  const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [orders, setOrders] = useState<DashboardRow[]>([]);
+  const [kanban, setKanban] = useState<DashboardKanbanResponse>({ stages: [] });
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -110,6 +102,8 @@ export default function Home() {
     setSession(null);
     setItems([]);
     setOrders([]);
+    setKanban({ stages: [] });
+    setSummary(null);
     setModalItem(null);
     setIsOrderModalOpen(false);
     setSelectedOrderId(null);
@@ -174,8 +168,14 @@ export default function Home() {
     setIsLoading(true);
     setError("");
     try {
-      const result = await listOrders(session.accessToken, nextSearch);
-      setOrders(result.items);
+      const [rows, board, totals] = await Promise.all([
+        listDashboardOrders(session.accessToken, nextSearch),
+        getDashboardKanban(session.accessToken, nextSearch),
+        getDashboardSummary(session.accessToken, nextSearch),
+      ]);
+      setOrders(rows.items);
+      setKanban(board);
+      setSummary(totals);
     } catch (err) {
       if (isUnauthorizedError(err)) {
         clearStoredSession("La sesion vencio. Ingresá nuevamente.");
@@ -382,7 +382,7 @@ export default function Home() {
         {isLoading ? <p className={styles.status}>Cargando datos...</p> : null}
 
         {mainView === "orders" ? (
-          <OrdersView orders={orders} onOpen={setSelectedOrderId} />
+          <OrdersView orders={orders} kanban={kanban} summary={summary} onOpen={setSelectedOrderId} />
         ) : (
           <Table
             columns={buildColumns(
@@ -447,186 +447,128 @@ function resourceIcon(resource: MasterName): string {
   return icons[resource];
 }
 
-function OrdersView({ orders, onOpen }: { orders: OrderSummary[]; onOpen: (orderId: string) => void }) {
-  const rows = orders.flatMap((order) => buildOrderRows(order));
-
+function OrdersView({
+  orders,
+  kanban,
+  summary,
+  onOpen,
+}: {
+  orders: DashboardRow[];
+  kanban: DashboardKanbanResponse;
+  summary: DashboardSummary | null;
+  onOpen: (orderId: string) => void;
+}) {
   return (
-    <div className={styles.ordersTableWrap}>
-      <table className={styles.ordersTable}>
-        <colgroup>
-          <col className={styles.colOrderCode} />
-          <col className={styles.colDate} />
-          <col className={styles.colClient} />
-          <col className={styles.colProduct} />
-          <col className={styles.colQuantity} />
-          <col className={styles.colStage} />
-          <col className={styles.colDate} />
-          <col className={styles.colDays} />
-          <col className={styles.colLocation} />
-          <col className={styles.colStatus} />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>OC</th>
-            <th>Alta</th>
-            <th>Cliente</th>
-            <th>Producto</th>
-            <th>Cant.</th>
-            <th>Sector</th>
-            <th>Ingreso</th>
-            <th>Dias</th>
-            <th>Ubicacion</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
+    <div className={styles.dashboardStack}>
+      <section className={styles.summaryGrid}>
+        <SummaryTile label="Activas" value={summary?.activeOrders ?? 0} />
+        <SummaryTile label="Arreglo" value={summary?.inRepair ?? 0} />
+        <SummaryTile label="Demoradas" value={summary?.bottlenecks ?? 0} />
+        <SummaryTile label="Vencidas" value={summary?.overdue ?? 0} />
+        <SummaryTile label="Finalizadas" value={summary?.finalized ?? 0} />
+      </section>
+
+      <div className={styles.ordersTableWrap}>
+        <table className={styles.ordersTable}>
+          <colgroup>
+            <col className={styles.colOrderCode} />
+            <col className={styles.colClient} />
+            <col className={styles.colProduct} />
+            <col className={styles.colQuantity} />
+            <col className={styles.colStage} />
+            <col className={styles.colDate} />
+            <col className={styles.colDays} />
+            <col className={styles.colLocation} />
+            <col className={styles.colStatus} />
+          </colgroup>
+          <thead>
             <tr>
-              <td colSpan={10} className={styles.emptyState}>
-                No hay ordenes de corte cargadas
-              </td>
+              <th>OC</th>
+              <th>Cliente</th>
+              <th>Producto</th>
+              <th>Cant.</th>
+              <th>Sector</th>
+              <th>Ingreso</th>
+              <th>Dias</th>
+              <th>Ubicacion</th>
+              <th>Estado</th>
             </tr>
-          ) : (
-            rows.map((row) => (
-              <tr key={row.id} className={rowClassName(row.kind)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
-                <td>
-                  <span className={styles.orderCode}>{row.orderCode}</span>
-                </td>
-                <td>{row.createdDate}</td>
-                <td>{row.client}</td>
-                <td>{row.product}</td>
-                <td>{row.quantity}</td>
-                <td>{row.stage}</td>
-                <td>{row.stageEnteredAt}</td>
-                <td>{row.daysInStage}</td>
-                <td>{row.location}</td>
-                <td>
-                  <span
-                    className={`${styles.statusPill} ${styles[`status${capitalize(row.trafficTone)}`]}`}
-                  >
-                    {row.trafficLabel}
-                  </span>
+          </thead>
+          <tbody>
+            {orders.length === 0 ? (
+              <tr>
+                <td colSpan={9} className={styles.emptyState}>
+                  No hay ordenes de corte para mostrar
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ) : (
+              orders.map((row) => (
+                <tr key={row.partId} className={rowClassName(row.rowType)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
+                  <td>
+                    <span className={styles.orderCode}>{rowCode(row)}</span>
+                  </td>
+                  <td>{row.clientName}</td>
+                  <td>{row.articleName}</td>
+                  <td>{row.quantity}</td>
+                  <td>{row.stage?.name ?? row.statusLabel}</td>
+                  <td>{row.startedAt ? formatDate(row.startedAt) : "Pendiente"}</td>
+                  <td>{row.daysInStage ?? "-"}</td>
+                  <td>{row.location}</td>
+                  <td>
+                    <span className={`${styles.statusPill} ${styles[`status${semaphoreTone(row.semaphore)}`]}`}>
+                      {row.statusLabel}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <section className={styles.kanbanBoard}>
+        {kanban.stages.map((column) => (
+          <div className={styles.kanbanColumn} key={column.stage.id}>
+            <header>
+              <strong>{column.stage.name}</strong>
+              <span>{column.parts.length}</span>
+            </header>
+            <div className={styles.kanbanCards}>
+              {column.parts.length === 0 ? <p>Sin partes</p> : null}
+              {column.parts.map((part) => (
+                <button type="button" key={part.id} onClick={() => onOpen(part.order?.id ?? "")}>
+                  <strong>{part.partCode}</strong>
+                  <span>{part.quantity} prendas</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }
 
-function buildOrderRows(order: OrderSummary): OrderRow[] {
-  const createdDate = formatDate(order.createdAt);
-  const activeParts = order.parts.filter((part) => !partIsHistorical(part.status));
-  const trackedParts = activeParts.length > 0 ? activeParts : order.parts;
-  const rootPart = order.parts.find((part) => part.partCode === "P1") ?? order.parts[0];
-  const visibleChildParts = activeParts.filter((part) => part.id !== rootPart?.id);
-  const hasSplitParts = Boolean(rootPart && visibleChildParts.length > 0);
-
-  if (hasSplitParts && rootPart) {
-    return [
-      {
-        id: `${order.id}-split-parent`,
-        orderCode: order.internalCode,
-        createdDate,
-        client: (order.client.businessName ?? order.client.name ?? "Sin cliente"),
-        product: order.article.name,
-        quantity: rootPart.quantity,
-        stage: "Corte dividido",
-        stageEnteredAt: `${visibleChildParts.length} partes`,
-        daysInStage: "ramas",
-        location: `${visibleChildParts.length} ubicaciones`,
-        trafficLabel: "Dividida",
-        trafficTone: "yellow",
-        kind: "splitParent",
-        orderId: order.id,
-      },
-      ...visibleChildParts.map((part, index) =>
-        buildTrackedOrderRow(order, part, index, createdDate, "splitChild"),
-      ),
-    ];
-  }
-
-  return trackedParts.map((part, index) =>
-    buildTrackedOrderRow(order, part, index, createdDate, "single"),
+function SummaryTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className={styles.summaryTile}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
-function buildTrackedOrderRow(
-  order: OrderSummary,
-  part: OrderSummary["parts"][number],
-  index: number,
-  createdDate: string,
-  kind: OrderRow["kind"],
-): OrderRow {
-  const tracking = buildPartTracking(part, order.status, order.createdAt);
-  return {
-    id: part.id,
-    orderCode: kind === "splitChild"
-      ? `${order.internalCode}-${String.fromCharCode(65 + index)}`
-      : order.internalCode,
-    createdDate,
-    client: (order.client.businessName ?? order.client.name ?? "Sin cliente"),
-    product: order.article.name,
-    quantity: part.quantity,
-    stage: tracking.stage,
-    stageEnteredAt: tracking.stageEnteredAt,
-    daysInStage: tracking.daysInStage,
-    location: tracking.location,
-    trafficLabel: tracking.trafficLabel,
-    trafficTone: tracking.trafficTone,
-    kind,
-    orderId: order.id,
-  };
+function rowCode(row: DashboardRow): string {
+  if (row.rowType === "SPLIT_CHILD") {
+    return `${row.internalCode}-${row.partCode}`;
+  }
+  return row.externalCode || row.internalCode;
 }
 
-function buildPartTracking(
-  part: OrderSummary["parts"][number],
-  orderStatus: string,
-  orderCreatedAt: string,
-): Omit<OrderRow, "id" | "orderCode" | "createdDate" | "client" | "product" | "quantity" | "kind" | "orderId"> {
-  const events = [...(part.events ?? [])].sort((a, b) =>
-    new Date(a.startedAt ?? a.finishedAt ?? 0).getTime() -
-    new Date(b.startedAt ?? b.finishedAt ?? 0).getTime(),
-  );
-  const activeEvent =
-    events.find((event) => !event.finishedAt) ?? events[events.length - 1] ?? null;
-  const enteredAt = activeEvent?.startedAt ?? orderCreatedAt;
-  const stageCode = activeEvent?.stage?.code ?? part.currentStage?.code ?? "CORTE";
-  const stageName = activeEvent
-    ? activeEvent.stage?.name ?? part.currentStage?.name ?? stageNameFromCode(stageCode)
-    : "Esperando tela";
-  const traffic = getTrafficStatus(orderStatus, part.status, activeEvent);
-
-  return {
-    stage: stageName,
-    stageEnteredAt: formatDate(enteredAt),
-    daysInStage: String(daysSince(enteredAt)),
-    location: locationLabel(stageCode, activeEvent?.workshop?.name),
-    trafficLabel: traffic.label ?? stateLabel(stageCode, Boolean(activeEvent)),
-    trafficTone: traffic.tone,
-  };
-}
-
-function getTrafficStatus(
-  orderStatus: string,
-  partStatus: string,
-  activeEvent: NonNullable<OrderSummary["parts"][number]["events"]>[number] | null,
-): { label?: string; tone: OrderRow["trafficTone"] } {
-  if (orderStatus === "FINALIZADA" || partStatus === "FINALIZADA") {
-    return { label: "Finalizada", tone: "green" };
-  }
-  if (!activeEvent) {
-    return { label: "En espera", tone: "red" };
-  }
-  if (
-    activeEvent.estimatedFinishAt &&
-    new Date(activeEvent.estimatedFinishAt).getTime() < Date.now()
-  ) {
-    return { tone: "red" };
-  }
-  return { tone: "yellow" };
+function semaphoreTone(value: DashboardRow["semaphore"]): "Red" | "Yellow" | "Green" {
+  if (value === "OVERDUE") return "Red";
+  if (value === "WARNING") return "Yellow";
+  return "Green";
 }
 
 function partIsHistorical(status: string): boolean {
@@ -641,74 +583,11 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function daysSince(value: string): number {
-  const elapsed = Date.now() - new Date(value).getTime();
-  return Math.max(0, Math.floor(elapsed / 86_400_000));
-}
-
-function stageNameFromCode(code: string): string {
-  const names: Record<string, string> = {
-    CORTE: "Corte",
-    BORDADO: "Bordado",
-    ESTAMPADO: "Estampado",
-    AVIOS_CONFECCION: "Avios confección",
-    CONFECCION: "Confección",
-    ATRAQUE: "Atraque",
-    OJAL_BOTON: "Ojal y botón",
-    AVIOS_TERMINACION: "Avios terminación",
-    PLANCHA: "Plancha",
-    TERMINACION: "Terminación",
-  };
-  return names[code] ?? code;
-}
-
-function stateLabel(code: string, hasStarted: boolean): string {
-  if (!hasStarted) {
-    return "En espera";
-  }
-  const labels: Record<string, string> = {
-    CORTE: "Cortándose",
-    BORDADO: "Bordándose",
-    ESTAMPADO: "Estampándose",
-    AVIOS_CONFECCION: "Preparando avíos",
-    CONFECCION: "En confección",
-    ATRAQUE: "En atraque",
-    OJAL_BOTON: "En ojal y botón",
-    AVIOS_TERMINACION: "Avíos terminación",
-    PLANCHA: "En plancha",
-    TERMINACION: "En depósito",
-  };
-  return labels[code] ?? "En curso";
-}
-
-function locationLabel(code: string, workshopName?: string): string {
-  if (workshopName) {
-    return workshopName;
-  }
-  const locations: Record<string, string> = {
-    CORTE: "Galpón corte",
-    BORDADO: "Sector bordado",
-    ESTAMPADO: "Sector estampado",
-    AVIOS_CONFECCION: "Depósito avíos",
-    CONFECCION: "Taller interno",
-    ATRAQUE: "Sector atraque",
-    OJAL_BOTON: "Sector ojal/botón",
-    AVIOS_TERMINACION: "Depósito avíos",
-    PLANCHA: "Sector plancha",
-    TERMINACION: "Depósito final",
-  };
-  return locations[code] ?? "Planta Promatex";
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toLocaleUpperCase("es-AR") + value.slice(1);
-}
-
-function rowClassName(kind: OrderRow["kind"]): string {
-  if (kind === "splitParent") {
+function rowClassName(kind: DashboardRow["rowType"]): string {
+  if (kind === "SPLIT_PARENT") {
     return styles.splitParentRow;
   }
-  if (kind === "splitChild") {
+  if (kind === "SPLIT_CHILD") {
     return styles.childOrderRow;
   }
   return "";
