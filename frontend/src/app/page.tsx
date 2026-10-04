@@ -23,12 +23,19 @@ import {
 } from "../lib/api/masters.api";
 import {
   createOrder,
+  finishStage,
   getOrder,
   listOrders,
+  listStages,
+  markOrderRepair,
   OrderSummary,
   PartNode,
   recombineParts,
+  resolveOrderRepair,
   splitPart,
+  StageOption,
+  startStage,
+  updatePartSupply,
 } from "../lib/api/orders.api";
 import { formatList } from "../lib/formatters/master-formatters";
 import styles from "./page.module.css";
@@ -811,13 +818,33 @@ function OrderDetailModal({
   const [splitRows, setSplitRows] = useState("5|Lote A\n5|Lote B");
   const [componentIds, setComponentIds] = useState("");
   const [recombineQuantity, setRecombineQuantity] = useState("1");
+  const [stages, setStages] = useState<StageOption[]>([]);
+  const [workshops, setWorkshops] = useState<WorkshopMaster[]>([]);
+  const [stagePartId, setStagePartId] = useState("");
+  const [stageId, setStageId] = useState("");
+  const [executionType, setExecutionType] = useState<"INTERNO" | "EXTERNO">("INTERNO");
+  const [stageWorkshopId, setStageWorkshopId] = useState("");
+  const [estimatedFinishAt, setEstimatedFinishAt] = useState("");
+  const [stageNote, setStageNote] = useState("");
+  const [finishIncludesAtraque, setFinishIncludesAtraque] = useState(false);
+  const [supplyPartId, setSupplyPartId] = useState("");
+  const [supplyId, setSupplyId] = useState("");
+  const [supplyCompleteness, setSupplyCompleteness] = useState("FALTANTE");
+  const [supplyQuantity, setSupplyQuantity] = useState("");
+  const [supplyNote, setSupplyNote] = useState("");
+  const [repairNote, setRepairNote] = useState("");
 
   const loadOrder = useCallback(async () => {
     setError("");
     try {
       const detail = await getOrder(token, orderId);
       setOrder(detail);
-      setSplitPartId((current) => current || firstActivePart(detail.parts)?.id || "");
+      const activePart = firstActivePart(detail.parts);
+      setSplitPartId((current) => current || activePart?.id || "");
+      setStagePartId((current) => current || activePart?.id || "");
+      setSupplyPartId((current) => current || activePart?.id || "");
+      const firstSupply = activePart?.supplies?.[0];
+      setSupplyId((current) => current || firstSupply?.supply?.id || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la orden");
     }
@@ -826,6 +853,23 @@ function OrderDetailModal({
   useEffect(() => {
     void loadOrder();
   }, [loadOrder]);
+
+  useEffect(() => {
+    async function loadOperationOptions() {
+      const [stageList, workshopList] = await Promise.all([
+        listStages(token),
+        listMasters<WorkshopMaster>("workshops", token, ""),
+      ]);
+      setStages(stageList);
+      setWorkshops(workshopList.items);
+      setStageId((current) => current || String(stageList[0]?.id ?? ""));
+      setStageWorkshopId((current) => current || workshopList.items[0]?.id || "");
+    }
+
+    void loadOperationOptions().catch((err) => {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar opciones de etapa");
+    });
+  }, [token]);
 
   async function handleSplit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -863,6 +907,90 @@ function OrderDetailModal({
     }
   }
 
+
+
+  async function handleStartStage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      await startStage(token, stagePartId, {
+        stageId: Number(stageId),
+        executionType,
+        workshopId: executionType === "EXTERNO" ? stageWorkshopId : undefined,
+        estimatedFinishAt: estimatedFinishAt ? new Date(estimatedFinishAt).toISOString() : undefined,
+        note: stageNote || undefined,
+      });
+      setStageNote("");
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar la etapa");
+    }
+  }
+
+  async function handleFinishStage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      await finishStage(token, stagePartId, {
+        note: stageNote || undefined,
+        includesAtraque: finishIncludesAtraque,
+      });
+      setStageNote("");
+      setFinishIncludesAtraque(false);
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo finalizar la etapa");
+    }
+  }
+
+  async function handleSupplyUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      await updatePartSupply(token, supplyPartId, supplyId, {
+        completeness: supplyCompleteness,
+        quantityAvailable: supplyQuantity ? Number(supplyQuantity) : undefined,
+        note: supplyNote || undefined,
+      });
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo actualizar el avio");
+    }
+  }
+
+  async function handleRepair(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      if (!order) {
+        return;
+      }
+      await markOrderRepair(token, order.id, repairNote);
+      setRepairNote("");
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo marcar arreglo");
+    }
+  }
+
+  async function handleResolveRepair() {
+    setError("");
+    try {
+      if (!order) {
+        return;
+      }
+      await resolveOrderRepair(token, order.id);
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo resolver arreglo");
+    }
+  }
+
   return (
     <Modal title={order ? `${order.internalCode} / ${order.externalCode}` : "Orden"} onClose={onClose}>
       {order ? (
@@ -877,6 +1005,48 @@ function OrderDetailModal({
             <h2>Partes</h2>
             <div className={styles.partTree}>{buildPartForest(order.parts).map((part) => <PartTreeItem key={part.id} part={part} />)}</div>
           </section>
+          <form className={styles.actionPanel} onSubmit={handleStartStage}>
+            <h2>Operar etapa</h2>
+            <div className={styles.compactGrid}>
+              <Select label="Parte" value={stagePartId} onChange={(event) => setStagePartId(event.target.value)} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
+              <Select label="Etapa" value={stageId} onChange={(event) => setStageId(event.target.value)} options={stages.map((stage) => ({ label: stage.name, value: String(stage.id) }))} />
+              <Select label="Ejecucion" value={executionType} onChange={(event) => setExecutionType(event.target.value as "INTERNO" | "EXTERNO")} options={[{ label: "Interna", value: "INTERNO" }, { label: "Externa", value: "EXTERNO" }]} />
+              {executionType === "EXTERNO" ? <Select label="Taller" value={stageWorkshopId} onChange={(event) => setStageWorkshopId(event.target.value)} options={workshops.map((workshop) => ({ label: workshop.name, value: workshop.id }))} /> : null}
+              <Input label="Fecha estimada" type="datetime-local" value={estimatedFinishAt} onChange={(event) => setEstimatedFinishAt(event.target.value)} />
+              <Input label="Nota" value={stageNote} onChange={(event) => setStageNote(event.target.value)} />
+            </div>
+            <label className={styles.checkboxLine}>
+              <input type="checkbox" checked={finishIncludesAtraque} onChange={(event) => setFinishIncludesAtraque(event.target.checked)} />
+              Atraque incluido en confeccion externa
+            </label>
+            <div className={styles.formActions}>
+              <Button type="submit">Iniciar etapa</Button>
+              <Button type="button" variant="secondary" onClick={(event) => void handleFinishStage(event as unknown as FormEvent<HTMLFormElement>)}>Finalizar etapa</Button>
+            </div>
+          </form>
+          <form className={styles.actionPanel} onSubmit={handleSupplyUpdate}>
+            <h2>Avios de la parte</h2>
+            <div className={styles.compactGrid}>
+              <Select label="Parte" value={supplyPartId} onChange={(event) => {
+                setSupplyPartId(event.target.value);
+                const nextPart = order.parts.find((part) => part.id === event.target.value);
+                setSupplyId(nextPart?.supplies?.[0]?.supply?.id ?? "");
+              }} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
+              <Select label="Avio" value={supplyId} onChange={(event) => setSupplyId(event.target.value)} options={(order.parts.find((part) => part.id === supplyPartId)?.supplies ?? []).map((supply) => ({ label: supply.supply?.name ?? supply.id, value: supply.supply?.id ?? supply.id }))} />
+              <Select label="Estado" value={supplyCompleteness} onChange={(event) => setSupplyCompleteness(event.target.value)} options={[{ label: "Faltante", value: "FALTANTE" }, { label: "Parcial", value: "PARCIAL" }, { label: "Completo", value: "COMPLETO" }]} />
+              <Input label="Cantidad disponible" type="number" min="0" value={supplyQuantity} onChange={(event) => setSupplyQuantity(event.target.value)} />
+              <Input label="Nota" value={supplyNote} onChange={(event) => setSupplyNote(event.target.value)} />
+            </div>
+            <Button type="submit" variant="secondary">Actualizar avios</Button>
+          </form>
+          <form className={styles.actionPanel} onSubmit={handleRepair}>
+            <h2>Arreglo</h2>
+            <Input label="Nota de arreglo" value={repairNote} onChange={(event) => setRepairNote(event.target.value)} />
+            <div className={styles.formActions}>
+              <Button type="submit" variant="danger">Marcar arreglo</Button>
+              <Button type="button" variant="secondary" onClick={() => void handleResolveRepair()}>Resolver arreglo</Button>
+            </div>
+          </form>
           <form className={styles.actionPanel} onSubmit={handleSplit}>
             <h2>Dividir parte</h2>
             <Select label="Parte" value={splitPartId} onChange={(event) => setSplitPartId(event.target.value)} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />

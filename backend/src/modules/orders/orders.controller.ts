@@ -6,6 +6,7 @@ import { UserRole } from '../users/entities/user.enums';
 import {
   CreateOrderDto,
   OrderPartsQueryDto,
+  RepairOrderDto,
   OrderQueryDto,
 } from './dto/order.dto';
 import { OrdersService } from './orders.service';
@@ -23,6 +24,18 @@ export class OrdersController {
   @Get()
   findAll(@Query() query: OrderQueryDto) {
     return this.ordersService.findAll(query);
+  }
+
+
+  @Post(':id/repair')
+  markRepair(@Param('id') id: string, @Body() dto: RepairOrderDto) {
+    return this.ordersService.markRepair(id, dto);
+  }
+
+  @Post(':id/repair/resolve')
+  @Roles(UserRole.ADMIN)
+  resolveRepair(@Param('id') id: string) {
+    return this.ordersService.resolveRepair(id);
   }
 
   @Get(':id')

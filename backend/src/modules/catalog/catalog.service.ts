@@ -17,6 +17,7 @@ import {
 import { Fabric } from './entities/fabric.entity';
 import { SizeCurveValue } from './entities/size-curve-value.entity';
 import { SizeCurve } from './entities/size-curve.entity';
+import { Stage } from './entities/stage.entity';
 import { Supply } from './entities/supply.entity';
 
 @Injectable()
@@ -28,7 +29,13 @@ export class CatalogService {
     private readonly suppliesRepository: Repository<Supply>,
     @InjectRepository(SizeCurve)
     private readonly sizeCurvesRepository: Repository<SizeCurve>,
+    @InjectRepository(Stage)
+    private readonly stagesRepository: Repository<Stage>,
   ) {}
+
+  findStages(): Promise<Stage[]> {
+    return this.stagesRepository.find({ order: { sequenceOrder: 'ASC' } });
+  }
 
   createFabric(dto: CreateFabricDto): Promise<Fabric> {
     const fabric = this.fabricsRepository.create({

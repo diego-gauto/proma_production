@@ -7,12 +7,14 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsDateString,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
-import { PartSplitMode } from '../entities/order.enums';
+import { StageExecutionType } from '../../catalog/entities/catalog.enums';
+import { PartSplitMode, SupplyCompleteness } from '../entities/order.enums';
 
 export class OrderQueryDto extends PaginationQueryDto {}
 
@@ -124,4 +126,60 @@ export class RecombinePartsDto {
   @IsString()
   @MaxLength(255)
   note?: string;
+}
+
+
+export class StartStageDto {
+  @Type(() => Number)
+  @IsInt()
+  stageId!: number;
+
+  @IsEnum(StageExecutionType)
+  executionType!: StageExecutionType;
+
+  @IsOptional()
+  @IsUUID()
+  workshopId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  estimatedFinishAt?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class FinishStageDto {
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsDateString()
+  actualFinishAt?: string;
+
+  @IsOptional()
+  includesAtraque?: boolean;
+}
+
+export class UpdatePartSupplyDto {
+  @IsEnum(SupplyCompleteness)
+  completeness!: SupplyCompleteness;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantityAvailable?: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class RepairOrderDto {
+  @IsString()
+  @MaxLength(500)
+  note!: string;
 }
