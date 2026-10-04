@@ -48,12 +48,19 @@ export class OrderPartsController {
   }
 
   @Post(':id/split')
-  split(@Param('id') id: string, @Body() dto: SplitPartDto) {
-    return this.ordersService.split(id, dto);
+  split(
+    @Param('id') id: string,
+    @Body() dto: SplitPartDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.split(id, dto, user);
   }
 
   @Post('recombine')
-  recombine(@Body() dto: RecombinePartsDto) {
-    return this.ordersService.recombine(dto);
+  recombine(
+    @Body() dto: RecombinePartsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.recombine(dto, user);
   }
 }
