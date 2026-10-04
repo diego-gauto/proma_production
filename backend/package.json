@@ -21,6 +21,7 @@
     "typeorm": "typeorm-ts-node-commonjs -d src/database/data-source.ts",
     "migration:run": "ts-node run-migrations.ts",
     "migration:revert": "ts-node revert-migration.ts",
+    "seed:demo": "ts-node run-demo-seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

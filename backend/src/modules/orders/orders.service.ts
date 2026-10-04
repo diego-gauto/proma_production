@@ -190,8 +190,13 @@ export class OrdersService {
     });
   }
 
-  async split(partId: string, dto: SplitPartDto): Promise<OrderPart[]> {
+  async split(
+    partId: string,
+    dto: SplitPartDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<OrderPart[]> {
     const parent = await this.findPart(partId);
+    this.ensureOperationalChangePermission(currentUser, parent.currentStage?.code ?? null);
     if (parent.isSplit || parent.status === PartStatus.DIVIDIDA) {
       throw new ConflictException('Esta parte ya fue dividida');
     }
@@ -246,12 +251,15 @@ export class OrdersService {
     return this.findPartsByIds(saved.map((part) => part.id));
   }
 
-  async recombine(dto: RecombinePartsDto): Promise<OrderPart> {
+  async recombine(
+    dto: RecombinePartsDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<OrderPart> {
     const branches = await this.orderPartsRepository.find({
       where: { id: In(dto.componentPartIds) },
       relations: {
         order: true,
-        parentPart: true,
+        parentPart: { currentStage: true },
         fabric: true,
         sizeCurveValue: true,
       },
@@ -277,6 +285,10 @@ export class OrdersService {
     ) {
       throw new BadRequestException('Solo se pueden reunificar ramas componente activas');
     }
+    this.ensureOperationalChangePermission(
+      currentUser,
+      branches[0].parentPart?.currentStage?.code ?? null,
+    );
 
     const siblingsCount = await this.orderPartsRepository.count({
       where: { parentPartId: parentId },
@@ -441,6 +453,25 @@ export class OrdersService {
     );
     if (!allowed) {
       throw new ForbiddenException('No tenes permisos para esta accion');
+    }
+  }
+
+  private ensureOperationalChangePermission(
+    user: AuthenticatedUser,
+    sectorCode: SectorCode | null,
+  ): void {
+    if (user.role === UserRole.ADMIN) {
+      return;
+    }
+    const allowed = (user.permissions ?? []).some(
+      (permission) =>
+        permission.isAllowed &&
+        permission.action === PermissionAction.FORZAR_CAMBIO &&
+        (permission.sectorCode === null ||
+          (sectorCode !== null && permission.sectorCode === sectorCode)),
+    );
+    if (!allowed) {
+      throw new ForbiddenException('No tenes permisos para dividir o reunificar esta parte');
     }
   }
 

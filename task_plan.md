@@ -1,23 +1,23 @@
-# Etapa 6 - Notificaciones
+# Etapa 8 - Hardening, Demo y Deploy MVP
 
 ## Goal
-Implementar Fase 6 del plan: backend de notificaciones, deteccion de cuellos de botella, fechas estimadas incumplidas y frontend con campanita/listado/marcar leidas.
+Implementar Fase 8 del plan: matriz/cobertura de permisos, UX final verificable, seeds demo, hardening de errores/casos edge y preparacion de deploy MVP sin tocar produccion sin backup/confirmacion.
 
 ## Phases
-1. Relevar implementacion actual de notificaciones, eventos, permisos y UI. Status: complete.
-2. Backend TDD: tests rojos para endpoints, cuello de botella y vencimientos. Status: complete.
-3. Backend implementacion: servicio, controlador, schedule/configuracion y reglas anti-duplicado. Status: complete.
-4. Frontend TDD/implementacion: API, campanita, listado y marcar leidas con polling simple. Status: complete.
-5. Verificacion: build/test backend y frontend, e2e relacionado y smoke funcional. Status: complete.
+1. Relevar estado actual de permisos, seeds, errores de negocio, frontend y deploy. Status: complete.
+2. Backend TDD: agregar tests rojos para permisos sensibles, seed demo y edge cases documentados. Status: complete.
+3. Backend implementacion: permisos faltantes, seed demo idempotente y errores de negocio claros. Status: complete.
+4. Frontend UX hardening: formularios/flujos compactos, estados de error/carga y documentar verificacion responsive. Status: complete.
+5. Deploy readiness: Dockerfiles/config/env docs/checklist VPS sin ejecutar produccion sin backup. Status: complete.
+6. Verificacion: build/test/e2e backend y frontend, smoke local y reporte final. Status: complete.
 
 ## Decisions
-- Trabajar en rama `etapa/6-notificaciones` nacida desde `develop`.
-- Mantener notificaciones in-app por polling en frontend, segun PRD MVP; no agregar WebSocket si no existe base previa.
-- Implementar chequeos periodicos con intervalo diario propio del modulo para no agregar `@nestjs/schedule` en esta etapa.
-- Destinatarios automaticos de cuellos de botella/vencimientos: usuarios ADMIN activos, coherente con visibilidad de control/gerencia del MVP actual.
+- Rama de trabajo: `etapa/8-hardening-demo-deploy`, creada desde `develop`.
+- La etapa 8.5 se prepara y documenta; el deploy productivo real requiere backup reciente/verificado y acceso/confirmacion operativa antes de tocar VPS.
+- Mantener TDD para cambios de comportamiento: escribir test, verlo fallar, implementar minimo, verificar verde.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|
-| `error building bubblewrap command: mountinfo path is not absolute` | comandos `git status`, `rg`, script de planning y apply_patch en sandbox | Reintentar comandos/ediciones necesarios con `require_escalated`; registrar la causa. |
-| `pnpm run test -- --runInBand` paso `--runInBand` como patron de Jest | suite backend completa | Usar `pnpm --dir backend exec jest --runInBand` y equivalente para e2e. |
+| `error building bubblewrap command: mountinfo path is not absolute` | `pwd`, `rg --files`, `git status`, `apply_patch` y otros comandos en sandbox | Reintentar comandos/ediciones necesarios con `require_escalated` y permisos acotados. |
+| `pnpm run test -- --runInBand` pasa `--runInBand` como patron de Jest | Verificacion backend completa | Usar `pnpm --dir backend exec jest --runInBand` y `pnpm --dir backend exec jest --config test/jest-e2e.json --runInBand`. |
