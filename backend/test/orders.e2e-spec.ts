@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 import * as request from 'supertest';
@@ -15,12 +15,27 @@ process.env.CORS_ORIGIN = 'http://localhost:3000';
 
 import { AppModule } from './../src/app.module';
 import {
+  FabricFormatType,
+  FabricWeaveType,
   SectorCode,
   SizeSequenceType,
   StageExecutionType,
+  SupplyCategory,
 } from './../src/modules/catalog/entities/catalog.enums';
-import { PartStatus } from './../src/modules/orders/entities/order.enums';
+import {
+  PartSplitMode,
+  PartStatus,
+} from './../src/modules/orders/entities/order.enums';
 import { UserRole } from './../src/modules/users/entities/user.enums';
+
+type OrderFixture = {
+  clientId: string;
+  articleId: string;
+  fabricId: string;
+  sizeCurveId: number;
+  sizes: { id: number; label: string }[];
+  supplyId: string;
+};
 
 describe('Orders (e2e)', () => {
   let app: INestApplication;
@@ -37,6 +52,13 @@ describe('Orders (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
 
     dataSource = app.get(DataSource);
@@ -64,22 +86,36 @@ describe('Orders (e2e)', () => {
     await app?.close();
   });
 
-  it('creates an order with requested items and one root part, then lists it', async () => {
+  async function createOrderFixture(label: string): Promise<OrderFixture> {
+    const uniqueTax = `30-${String(Math.floor(Math.random() * 89999999 + 10000000))}-1`;
     const client = await dataSource.query(
       `
-        INSERT INTO clients (name)
-        VALUES ($1)
+        INSERT INTO clients (name, business_name, tax_id)
+        VALUES ($1, $1, $2)
         RETURNING id
       `,
-      [`Cliente Orden ${suffix}`],
+      [`Cliente ${label} ${suffix}`, uniqueTax],
     );
     const article = await dataSource.query(
       `
-        INSERT INTO articles (name)
-        VALUES ($1)
+        INSERT INTO articles (code, name)
+        VALUES ($1, $2)
         RETURNING id
       `,
-      [`Articulo Orden ${suffix}`],
+      [`ART-${label}-${suffix}`.slice(0, 80), `Articulo ${label} ${suffix}`],
+    );
+    const fabric = await dataSource.query(
+      `
+        INSERT INTO fabrics (code, name, weave_type, format_type)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `,
+      [
+        `FAB-${label}-${suffix}`.slice(0, 80),
+        `Tela ${label} ${suffix}`,
+        FabricWeaveType.PUNTO,
+        FabricFormatType.ABIERTO,
+      ],
     );
     const curve = await dataSource.query(
       `
@@ -87,37 +123,98 @@ describe('Orders (e2e)', () => {
         VALUES ($1, $2)
         RETURNING id
       `,
-      [`Curva Orden ${suffix}`, SizeSequenceType.ALFABETICA],
+      [`Curva ${label} ${suffix}`, SizeSequenceType.ALFABETICA],
     );
-    const size = await dataSource.query(
+    const sizes = await dataSource.query(
       `
         INSERT INTO size_curve_values (size_curve_id, label, sort_order)
-        VALUES ($1, 'M', 1)
-        RETURNING id
+        VALUES ($1, 'S', 1), ($1, 'M', 2), ($1, 'L', 3)
+        RETURNING id, label
       `,
       [curve[0].id],
     );
+    const supply = await dataSource.query(
+      `
+        INSERT INTO supplies (code, name, category)
+        VALUES ($1, $2, $3)
+        RETURNING id
+      `,
+      [
+        `SUP-${label}-${suffix}`.slice(0, 80),
+        `Avio ${label} ${suffix}`,
+        SupplyCategory.CONFECCION,
+      ],
+    );
+    await dataSource.query(
+      `
+        INSERT INTO article_supplies (article_id, supply_id, quantity, note)
+        VALUES ($1, $2, 2, 'Puños')
+      `,
+      [article[0].id, supply[0].id],
+    );
+    await dataSource.query(
+      `
+        INSERT INTO article_decoration_parts (article_id, garment_part, decoration_type)
+        VALUES ($1, 'Pecho', 'BORDADO')
+      `,
+      [article[0].id],
+    );
+
+    return {
+      clientId: client[0].id as string,
+      articleId: article[0].id as string,
+      fabricId: fabric[0].id as string,
+      sizeCurveId: curve[0].id as number,
+      sizes: sizes as { id: number; label: string }[],
+      supplyId: supply[0].id as string,
+    };
+  }
+
+  it('creates an order with real order fabric, curve, requested items, root part and supply checklist', async () => {
+    const fixture = await createOrderFixture('Crear');
 
     const created = await request(app.getHttpServer())
       .post('/api/v1/orders')
       .set('Authorization', `Bearer ${token}`)
       .send({
         externalCode: `EXT-${suffix}`,
-        clientId: client[0].id,
-        articleId: article[0].id,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
         requestedItems: [
           {
-            sizeCurveValueId: size[0].id,
+            sizeCurveValueId: fixture.sizes[0].id,
             color: 'Azul',
             quantityRequested: 12,
+          },
+          {
+            sizeCurveValueId: fixture.sizes[1].id,
+            color: 'Azul',
+            quantityRequested: 8,
           },
         ],
       })
       .expect(201);
 
     expect(created.body.internalCode).toMatch(/^OC-\d{4}-\d{6}$/);
+    expect(created.body.fabric.id).toBe(fixture.fabricId);
+    expect(created.body.sizeCurve.id).toBe(fixture.sizeCurveId);
+    expect(created.body.requestedItems).toHaveLength(2);
     expect(created.body.parts).toEqual([
-      expect.objectContaining({ partCode: 'P1', quantity: 12 }),
+      expect.objectContaining({
+        partCode: 'P1',
+        quantity: 20,
+        supplies: [
+          expect.objectContaining({
+            supply: expect.objectContaining({ id: fixture.supplyId }),
+            quantityNeeded: 2,
+          }),
+        ],
+      }),
+    ]);
+    expect(created.body.article.decorationParts).toEqual([
+      expect.objectContaining({ garmentPart: 'Pecho', decorationType: 'BORDADO' }),
     ]);
 
     const listed = await request(app.getHttpServer())
@@ -132,41 +229,39 @@ describe('Orders (e2e)', () => {
         externalCode: `EXT-${suffix}`,
       }),
     ]);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[2].id, quantityRequested: 1 },
+        ],
+      })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-INVALID`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 1 },
+        ],
+      })
+      .expect(400);
   });
 
   it('lists order parts with current stage, active event and workshop for tracking', async () => {
-    const client = await dataSource.query(
-      `
-        INSERT INTO clients (name)
-        VALUES ($1)
-        RETURNING id
-      `,
-      [`Cliente Tracking ${suffix}`],
-    );
-    const article = await dataSource.query(
-      `
-        INSERT INTO articles (name)
-        VALUES ($1)
-        RETURNING id
-      `,
-      [`Articulo Tracking ${suffix}`],
-    );
-    const curve = await dataSource.query(
-      `
-        INSERT INTO size_curves (name, sequence_type)
-        VALUES ($1, $2)
-        RETURNING id
-      `,
-      [`Curva Tracking ${suffix}`, SizeSequenceType.ALFABETICA],
-    );
-    const size = await dataSource.query(
-      `
-        INSERT INTO size_curve_values (size_curve_id, label, sort_order)
-        VALUES ($1, 'L', 1)
-        RETURNING id
-      `,
-      [curve[0].id],
-    );
+    const fixture = await createOrderFixture('Tracking');
     const workshop = await dataSource.query(
       `
         INSERT INTO workshops (name, specialties)
@@ -181,11 +276,13 @@ describe('Orders (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         externalCode: `EXT-${suffix}-TRACK`,
-        clientId: client[0].id,
-        articleId: article[0].id,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
         requestedItems: [
           {
-            sizeCurveValueId: size[0].id,
+            sizeCurveValueId: fixture.sizes[2].id,
             quantityRequested: 8,
           },
         ],
@@ -253,5 +350,124 @@ describe('Orders (e2e)', () => {
         ],
       }),
     );
+  });
+
+  it('returns the order detail, filters parts by stage, splits lote/component branches and recombines components', async () => {
+    const fixture = await createOrderFixture('Arbol');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-TREE`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 10 },
+        ],
+      })
+      .expect(201);
+    const rootId = created.body.parts[0].id as string;
+
+    const loteSplit = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${rootId}/split`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        splitMode: PartSplitMode.LOTE,
+        subParts: [
+          { quantity: 6, splitReason: 'Lote A' },
+          { quantity: 4, splitReason: 'Lote B' },
+        ],
+      })
+      .expect(201);
+    expect(loteSplit.body).toHaveLength(2);
+    expect(loteSplit.body[0]).toMatchObject({
+      parentPartId: rootId,
+      quantity: 6,
+      splitMode: PartSplitMode.LOTE,
+      isComponentBranch: false,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${loteSplit.body[0].id}/split`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        splitMode: PartSplitMode.LOTE,
+        subParts: [
+          { quantity: 7, splitReason: 'Excede' },
+          { quantity: 1, splitReason: 'Excede mas' },
+        ],
+      })
+      .expect(400);
+
+    const componentSplit = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${loteSplit.body[0].id}/split`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        splitMode: PartSplitMode.COMPONENTE,
+        subParts: [
+          { quantity: 6, splitReason: 'Mangas a bordar' },
+          { quantity: 6, splitReason: 'Resto en espera' },
+        ],
+      })
+      .expect(201);
+    expect(componentSplit.body).toEqual([
+      expect.objectContaining({ isComponentBranch: true, quantity: 6 }),
+      expect.objectContaining({ isComponentBranch: true, quantity: 6 }),
+    ]);
+
+    const recombined = await request(app.getHttpServer())
+      .post('/api/v1/order-parts/recombine')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        componentPartIds: componentSplit.body.map((part: { id: string }) => part.id),
+        quantity: 6,
+        note: 'Componentes listos',
+      })
+      .expect(201);
+    expect(recombined.body).toMatchObject({
+      parentPartId: loteSplit.body[0].id,
+      quantity: 6,
+      isComponentBranch: false,
+      status: PartStatus.PENDIENTE,
+    });
+
+    const detail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(detail.body.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: loteSplit.body[0].id,
+          children: expect.arrayContaining([
+            expect.objectContaining({ status: PartStatus.REINTEGRADA }),
+            expect.objectContaining({ id: recombined.body.id }),
+          ]),
+        }),
+      ]),
+    );
+
+    const stage = await dataSource.query('SELECT id FROM stages WHERE code = $1', [
+      SectorCode.BORDADO,
+    ]);
+    await dataSource.query(
+      `
+        UPDATE order_parts
+        SET current_stage_id = $1, status = $2
+        WHERE id = $3
+      `,
+      [stage[0].id, PartStatus.EN_PROCESO, recombined.body.id],
+    );
+
+    const filtered = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${created.body.id}/parts`)
+      .set('Authorization', `Bearer ${token}`)
+      .query({ stageId: stage[0].id })
+      .expect(200);
+    expect(filtered.body).toEqual([
+      expect.objectContaining({ id: recombined.body.id }),
+    ]);
   });
 });

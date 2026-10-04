@@ -23,8 +23,12 @@ import {
 } from "../lib/api/masters.api";
 import {
   createOrder,
+  getOrder,
   listOrders,
   OrderSummary,
+  PartNode,
+  recombineParts,
+  splitPart,
 } from "../lib/api/orders.api";
 import { formatList } from "../lib/formatters/master-formatters";
 import styles from "./page.module.css";
@@ -53,6 +57,7 @@ type OrderRow = {
   trafficLabel: string;
   trafficTone: "red" | "yellow" | "green";
   kind: "single" | "splitParent" | "splitChild";
+  orderId: string;
 };
 
 const resources: {
@@ -82,6 +87,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [modalItem, setModalItem] = useState<MasterItem | "new" | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const clearStoredSession = useCallback((message?: string) => {
     window.localStorage.removeItem("proma-session");
@@ -90,6 +96,7 @@ export default function Home() {
     setOrders([]);
     setModalItem(null);
     setIsOrderModalOpen(false);
+    setSelectedOrderId(null);
     setError(message ?? "");
   }, []);
 
@@ -308,7 +315,7 @@ export default function Home() {
         {isLoading ? <p className={styles.status}>Cargando datos...</p> : null}
 
         {mainView === "orders" ? (
-          <OrdersView orders={orders} />
+          <OrdersView orders={orders} onOpen={setSelectedOrderId} />
         ) : (
           <Table
             columns={buildColumns(
@@ -332,6 +339,15 @@ export default function Home() {
             setIsOrderModalOpen(false);
             void loadOrders();
           }}
+        />
+      ) : null}
+
+      {selectedOrderId ? (
+        <OrderDetailModal
+          orderId={selectedOrderId}
+          token={session.accessToken}
+          onClose={() => setSelectedOrderId(null)}
+          onChanged={() => void loadOrders()}
         />
       ) : null}
 
@@ -364,7 +380,7 @@ function resourceIcon(resource: MasterName): string {
   return icons[resource];
 }
 
-function OrdersView({ orders }: { orders: OrderSummary[] }) {
+function OrdersView({ orders, onOpen }: { orders: OrderSummary[]; onOpen: (orderId: string) => void }) {
   const rows = orders.flatMap((order) => buildOrderRows(order));
 
   return (
@@ -405,7 +421,7 @@ function OrdersView({ orders }: { orders: OrderSummary[] }) {
             </tr>
           ) : (
             rows.map((row) => (
-              <tr key={row.id} className={rowClassName(row.kind)}>
+              <tr key={row.id} className={rowClassName(row.kind)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
                 <td>
                   <span className={styles.orderCode}>{row.orderCode}</span>
                 </td>
@@ -457,6 +473,7 @@ function buildOrderRows(order: OrderSummary): OrderRow[] {
         trafficLabel: "Dividida",
         trafficTone: "yellow",
         kind: "splitParent",
+        orderId: order.id,
       },
       ...visibleChildParts.map((part, index) =>
         buildTrackedOrderRow(order, part, index, createdDate, "splitChild"),
@@ -493,6 +510,7 @@ function buildTrackedOrderRow(
     trafficLabel: tracking.trafficLabel,
     trafficTone: tracking.trafficTone,
     kind,
+    orderId: order.id,
   };
 }
 
@@ -500,7 +518,7 @@ function buildPartTracking(
   part: OrderSummary["parts"][number],
   orderStatus: string,
   orderCreatedAt: string,
-): Omit<OrderRow, "id" | "orderCode" | "createdDate" | "client" | "product" | "quantity" | "kind"> {
+): Omit<OrderRow, "id" | "orderCode" | "createdDate" | "client" | "product" | "quantity" | "kind" | "orderId"> {
   const events = [...(part.events ?? [])].sort((a, b) =>
     new Date(a.startedAt ?? a.finishedAt ?? 0).getTime() -
     new Date(b.startedAt ?? b.finishedAt ?? 0).getTime(),
@@ -646,11 +664,11 @@ function OrderModal({
     externalCode: "",
     clientId: "",
     articleId: "",
-    sizeCurveValueId: "",
+    sizeCurveId: "",
     fabricId: "",
     color: "",
-    quantityRequested: "1",
   });
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -666,13 +684,12 @@ function OrderModal({
       setArticles(articlesResult.items);
       setCurves(curvesResult.items);
       setFabrics(fabricsResult.items);
+      const firstCurve = curvesResult.items[0];
       setForm((current) => ({
         ...current,
         clientId: current.clientId || clientsResult.items[0]?.id || "",
         articleId: current.articleId || articlesResult.items[0]?.id || "",
-        sizeCurveValueId:
-          current.sizeCurveValueId ||
-          String(curvesResult.items[0]?.values[0]?.id ?? ""),
+        sizeCurveId: current.sizeCurveId || String(firstCurve?.id ?? ""),
         fabricId: current.fabricId || fabricsResult.items[0]?.id || "",
       }));
     }
@@ -686,22 +703,36 @@ function OrderModal({
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  function setQuantity(sizeId: number, value: string) {
+    setQuantities((current) => ({ ...current, [String(sizeId)]: value }));
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    const requestedItems = selectedCurve.values
+      .map((value) => ({
+        sizeCurveValueId: value.id,
+        color: form.color || undefined,
+        quantityRequested: Number(quantities[String(value.id)] || 0),
+      }))
+      .filter((item) => item.quantityRequested > 0);
+    if (requestedItems.length === 0) {
+      setError("Cargá al menos un talle con cantidad mayor a cero.");
+      return;
+    }
+    if (!form.fabricId || !form.sizeCurveId) {
+      setError("La tela y la curva son obligatorias.");
+      return;
+    }
     try {
       await createOrder(token, {
         externalCode: form.externalCode,
         clientId: form.clientId,
         articleId: form.articleId,
-        requestedItems: [
-          {
-            sizeCurveValueId: Number(form.sizeCurveValueId),
-            fabricId: form.fabricId || undefined,
-            color: form.color || undefined,
-            quantityRequested: Number(form.quantityRequested),
-          },
-        ],
+        fabricId: form.fabricId,
+        sizeCurveId: Number(form.sizeCurveId),
+        requestedItems,
       });
       onSaved();
     } catch (err) {
@@ -709,27 +740,40 @@ function OrderModal({
     }
   }
 
-  const sizeOptions = curves.flatMap((curve) =>
-    curve.values.map((value) => ({
-      label: `${curve.name} - ${value.label}`,
-      value: String(value.id),
-    })),
-  );
+  const selectedCurve = curves.find((curve) => String(curve.id) === form.sizeCurveId) ?? curves[0] ?? { id: 0, name: "", sequenceType: "ALFABETICA", values: [] };
+  const selectedArticle = articles.find((article) => article.id === form.articleId);
 
   return (
     <Modal title="Nueva orden de corte" onClose={onClose}>
       <form className={styles.modalForm} onSubmit={handleSubmit}>
-        <Input label="Codigo externo" value={form.externalCode} onChange={(event) => setValue("externalCode", event.target.value)} required />
-        <Select label="Cliente" value={form.clientId} onChange={(event) => setValue("clientId", event.target.value)} options={clients.map((client) => ({ label: client.businessName, value: client.id }))} />
-        <Select label="Articulo" value={form.articleId} onChange={(event) => setValue("articleId", event.target.value)} options={articles.map((article) => ({ label: article.name, value: article.id }))} />
-        <Select label="Talle" value={form.sizeCurveValueId} onChange={(event) => setValue("sizeCurveValueId", event.target.value)} options={sizeOptions} />
-        <Select label="Tela" value={form.fabricId} onChange={(event) => setValue("fabricId", event.target.value)} options={[{ label: "Sin tela asignada", value: "" }, ...fabrics.map((fabric) => ({ label: `${fabric.name}${fabric.color ? ` - ${fabric.color}` : ""}`, value: fabric.id }))]} />
-        <Input label="Color" value={form.color} onChange={(event) => setValue("color", event.target.value)} />
-        <Input label="Cantidad" type="number" min="1" value={form.quantityRequested} onChange={(event) => setValue("quantityRequested", event.target.value)} required />
-        {clients.length === 0 || articles.length === 0 || sizeOptions.length === 0 ? (
+        <div className={styles.compactGrid}>
+          <Input label="Codigo externo" value={form.externalCode} onChange={(event) => setValue("externalCode", event.target.value)} required />
+          <Select label="Cliente" value={form.clientId} onChange={(event) => setValue("clientId", event.target.value)} options={clients.map((client) => ({ label: client.businessName, value: client.id }))} />
+          <Select label="Articulo" value={form.articleId} onChange={(event) => setValue("articleId", event.target.value)} options={articles.map((article) => ({ label: article.name, value: article.id }))} />
+          <Select label="Tela" value={form.fabricId} onChange={(event) => setValue("fabricId", event.target.value)} options={fabrics.map((fabric) => ({ label: `${fabric.name}${fabric.color ? ` - ${fabric.color}` : ""}`, value: fabric.id }))} />
+          <Select label="Curva" value={form.sizeCurveId} onChange={(event) => setValue("sizeCurveId", event.target.value)} options={curves.map((curve) => ({ label: curve.name, value: String(curve.id) }))} />
+          <Input label="Color operativo" value={form.color} onChange={(event) => setValue("color", event.target.value)} />
+        </div>
+        <section className={styles.referencePanel}>
+          <strong>Referencia del articulo</strong>
+          <span>{formatList(selectedArticle?.supplies ?? [], (supply) => supply.supply?.name ?? supply.id, "Sin avios cargados")}</span>
+          <span>{formatList(selectedArticle?.decorationParts ?? [], (part) => `${part.garmentPart}: ${part.decorationType}`, "Sin partes decorables")}</span>
+        </section>
+        <div className={styles.sizeGrid}>
+          {selectedCurve.values.map((value) => (
+            <Input
+              key={value.id}
+              label={value.label}
+              type="number"
+              min="0"
+              value={quantities[String(value.id)] ?? ""}
+              onChange={(event) => setQuantity(value.id, event.target.value)}
+            />
+          ))}
+        </div>
+        {clients.length === 0 || articles.length === 0 || selectedCurve.values.length === 0 || fabrics.length === 0 ? (
           <p className={styles.error}>
-            Para crear una orden primero debe existir al menos un cliente, un
-            articulo y una curva de talles.
+            Para crear una orden primero debe existir cliente, articulo, tela y curva con talles.
           </p>
         ) : null}
         {error ? <p className={styles.error}>{error}</p> : null}
@@ -739,7 +783,7 @@ function OrderModal({
           </Button>
           <Button
             type="submit"
-            disabled={clients.length === 0 || articles.length === 0 || sizeOptions.length === 0}
+            disabled={clients.length === 0 || articles.length === 0 || selectedCurve.values.length === 0 || fabrics.length === 0}
           >
             Crear orden
           </Button>
@@ -747,6 +791,145 @@ function OrderModal({
       </form>
     </Modal>
   );
+}
+
+function OrderDetailModal({
+  orderId,
+  token,
+  onClose,
+  onChanged,
+}: {
+  orderId: string;
+  token: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [order, setOrder] = useState<OrderSummary | null>(null);
+  const [error, setError] = useState("");
+  const [splitPartId, setSplitPartId] = useState("");
+  const [splitMode, setSplitMode] = useState<"LOTE" | "COMPONENTE">("LOTE");
+  const [splitRows, setSplitRows] = useState("5|Lote A\n5|Lote B");
+  const [componentIds, setComponentIds] = useState("");
+  const [recombineQuantity, setRecombineQuantity] = useState("1");
+
+  const loadOrder = useCallback(async () => {
+    setError("");
+    try {
+      const detail = await getOrder(token, orderId);
+      setOrder(detail);
+      setSplitPartId((current) => current || firstActivePart(detail.parts)?.id || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar la orden");
+    }
+  }, [orderId, token]);
+
+  useEffect(() => {
+    void loadOrder();
+  }, [loadOrder]);
+
+  async function handleSplit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    const subParts = splitRows
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [quantity, splitReason] = line.split("|").map((part) => part.trim());
+        return { quantity: Number(quantity), splitReason };
+      })
+      .filter((part) => part.quantity > 0);
+    try {
+      await splitPart(token, splitPartId, { splitMode, subParts });
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo dividir la parte");
+    }
+  }
+
+  async function handleRecombine(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      await recombineParts(token, {
+        componentPartIds: componentIds.split(",").map((id) => id.trim()).filter(Boolean),
+        quantity: Number(recombineQuantity),
+      });
+      await loadOrder();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo reunificar");
+    }
+  }
+
+  return (
+    <Modal title={order ? `${order.internalCode} / ${order.externalCode}` : "Orden"} onClose={onClose}>
+      {order ? (
+        <div className={styles.detailPanel}>
+          <section className={styles.orderSummaryGrid}>
+            <span><strong>Cliente</strong>{order.client.businessName}</span>
+            <span><strong>Articulo</strong>{order.article.name}</span>
+            <span><strong>Tela</strong>{order.fabric?.name ?? "Sin tela"}</span>
+            <span><strong>Curva</strong>{order.sizeCurve?.name ?? "Sin curva"}</span>
+          </section>
+          <section>
+            <h2>Partes</h2>
+            <div className={styles.partTree}>{buildPartForest(order.parts).map((part) => <PartTreeItem key={part.id} part={part} />)}</div>
+          </section>
+          <form className={styles.actionPanel} onSubmit={handleSplit}>
+            <h2>Dividir parte</h2>
+            <Select label="Parte" value={splitPartId} onChange={(event) => setSplitPartId(event.target.value)} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
+            <Select label="Modo" value={splitMode} onChange={(event) => setSplitMode(event.target.value as "LOTE" | "COMPONENTE")} options={[{ label: "Lote", value: "LOTE" }, { label: "Componente", value: "COMPONENTE" }]} />
+            <label className={styles.textAreaLabel}>Ramas: cantidad|motivo<textarea value={splitRows} onChange={(event) => setSplitRows(event.target.value)} /></label>
+            <Button type="submit">Dividir</Button>
+          </form>
+          <form className={styles.actionPanel} onSubmit={handleRecombine}>
+            <h2>Reunificar componentes</h2>
+            <Input label="IDs de ramas componente" value={componentIds} onChange={(event) => setComponentIds(event.target.value)} placeholder="id-1, id-2" />
+            <Input label="Cantidad reunificada" type="number" min="1" value={recombineQuantity} onChange={(event) => setRecombineQuantity(event.target.value)} />
+            <Button type="submit" variant="secondary">Reunificar</Button>
+          </form>
+        </div>
+      ) : (
+        <p className={styles.status}>Cargando detalle...</p>
+      )}
+      {error ? <p className={styles.error}>{error}</p> : null}
+    </Modal>
+  );
+}
+
+function PartTreeItem({ part }: { part: PartNode }) {
+  return (
+    <div className={styles.partNode}>
+      <div>
+        <strong>{part.partCode}</strong>
+        <span>{part.quantity} u. / {part.status}{part.isComponentBranch ? " / componente" : ""}</span>
+        {part.splitReason ? <small>{part.splitReason}</small> : null}
+        {part.supplies?.length ? <small>Avios: {formatList(part.supplies, (supply) => supply.supply?.name ?? supply.id)}</small> : null}
+      </div>
+      {part.children?.length ? (
+        <div className={styles.partChildren}>{part.children.map((child) => <PartTreeItem key={child.id} part={child} />)}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function firstActivePart(parts: PartNode[]): PartNode | null {
+  return parts.find((part) => !partIsHistorical(part.status)) ?? parts[0] ?? null;
+}
+
+function buildPartForest(parts: PartNode[]): PartNode[] {
+  const map = new Map(parts.map((part) => [part.id, { ...part, children: [] as PartNode[] }]));
+  const roots: PartNode[] = [];
+  map.forEach((part) => {
+    if (part.parentPartId && map.has(part.parentPartId)) {
+      map.get(part.parentPartId)?.children?.push(part);
+    } else {
+      roots.push(part);
+    }
+  });
+  return roots;
 }
 
 function buildColumns(

@@ -6,6 +6,7 @@ import { CreatePhaseOneDataModel1724544000000 } from './migrations/1724544000000
 import { SeedInitialAdminUser1724630400000 } from './migrations/1724630400000-SeedInitialAdminUser';
 import { RectifyPhaseThreeMasters1791055000000 } from './migrations/1791055000000-RectifyPhaseThreeMasters';
 import { FixPhaseThreeLegacyColumns1791055100000 } from './migrations/1791055100000-FixPhaseThreeLegacyColumns';
+import { AddOrderCreationRelations1791055200000 } from './migrations/1791055200000-AddOrderCreationRelations';
 
 config({ path: ['.env.local', '.env'] });
 
@@ -21,5 +22,6 @@ export default new DataSource({
     SeedInitialAdminUser1724630400000,
     RectifyPhaseThreeMasters1791055000000,
     FixPhaseThreeLegacyColumns1791055100000,
+    AddOrderCreationRelations1791055200000,
   ],
 });

@@ -5,6 +5,7 @@ import { CreatePhaseOneDataModel1724544000000 } from '../database/migrations/172
 import { SeedInitialAdminUser1724630400000 } from '../database/migrations/1724630400000-SeedInitialAdminUser';
 import { RectifyPhaseThreeMasters1791055000000 } from '../database/migrations/1791055000000-RectifyPhaseThreeMasters';
 import { FixPhaseThreeLegacyColumns1791055100000 } from '../database/migrations/1791055100000-FixPhaseThreeLegacyColumns';
+import { AddOrderCreationRelations1791055200000 } from '../database/migrations/1791055200000-AddOrderCreationRelations';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -18,6 +19,7 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
     SeedInitialAdminUser1724630400000,
     RectifyPhaseThreeMasters1791055000000,
     FixPhaseThreeLegacyColumns1791055100000,
+    AddOrderCreationRelations1791055200000,
   ],
   migrationsRun: false,
   logging: process.env.NODE_ENV === 'development',
