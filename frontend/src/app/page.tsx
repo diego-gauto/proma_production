@@ -22,6 +22,12 @@ import {
   WorkshopMaster,
 } from "../lib/api/masters.api";
 import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  NotificationItem,
+} from "../lib/api/notifications.api";
+import {
   createOrder,
   finishStage,
   getOrder,
@@ -95,6 +101,9 @@ export default function Home() {
   const [modalItem, setModalItem] = useState<MasterItem | "new" | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const clearStoredSession = useCallback((message?: string) => {
     window.localStorage.removeItem("proma-session");
@@ -104,6 +113,9 @@ export default function Home() {
     setModalItem(null);
     setIsOrderModalOpen(false);
     setSelectedOrderId(null);
+    setNotifications([]);
+    setUnreadCount(0);
+    setIsNotificationsOpen(false);
     setError(message ?? "");
   }, []);
 
@@ -180,6 +192,46 @@ export default function Home() {
       void loadOrders();
     }
   }, [loadOrders, mainView, session]);
+
+  const loadNotifications = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+    try {
+      const result = await listNotifications(session.accessToken);
+      setNotifications(result.items);
+      setUnreadCount(result.unreadCount);
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        clearStoredSession("La sesion vencio. Ingresá nuevamente.");
+      }
+    }
+  }, [clearStoredSession, session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    void loadNotifications();
+    const interval = window.setInterval(() => void loadNotifications(), 60_000);
+    return () => window.clearInterval(interval);
+  }, [loadNotifications, session]);
+
+  async function handleMarkNotificationRead(id: string) {
+    if (!session) {
+      return;
+    }
+    await markNotificationRead(session.accessToken, id);
+    await loadNotifications();
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    if (!session) {
+      return;
+    }
+    await markAllNotificationsRead(session.accessToken);
+    await loadNotifications();
+  }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -272,6 +324,14 @@ export default function Home() {
             </p>
           </div>
           <div className={styles.userBox}>
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isOpen={isNotificationsOpen}
+              onToggle={() => setIsNotificationsOpen((current) => !current)}
+              onMarkRead={(id) => void handleMarkNotificationRead(id)}
+              onMarkAllRead={() => void handleMarkAllNotificationsRead()}
+            />
             <span>{session.user.fullName}</span>
             <small>{session.user.role}</small>
             <Button type="button" variant="secondary" onClick={handleLogout}>
@@ -652,6 +712,64 @@ function rowClassName(kind: OrderRow["kind"]): string {
     return styles.childOrderRow;
   }
   return "";
+}
+
+function NotificationBell({
+  notifications,
+  unreadCount,
+  isOpen,
+  onToggle,
+  onMarkRead,
+  onMarkAllRead,
+}: {
+  notifications: NotificationItem[];
+  unreadCount: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  onMarkRead: (id: string) => void;
+  onMarkAllRead: () => void;
+}) {
+  return (
+    <div className={styles.notificationBox}>
+      <button
+        type="button"
+        className={styles.notificationButton}
+        onClick={onToggle}
+        aria-label="Notificaciones"
+        title="Notificaciones"
+      >
+        <span>!</span>
+        {unreadCount > 0 ? <strong>{unreadCount}</strong> : null}
+      </button>
+      {isOpen ? (
+        <div className={styles.notificationPanel}>
+          <div className={styles.notificationHeader}>
+            <strong>Notificaciones</strong>
+            <button type="button" onClick={onMarkAllRead} disabled={unreadCount === 0}>
+              Leer todas
+            </button>
+          </div>
+          <div className={styles.notificationList}>
+            {notifications.length === 0 ? (
+              <p>Sin notificaciones</p>
+            ) : (
+              notifications.map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  className={notification.isRead ? styles.notificationItem : styles.notificationItemUnread}
+                  onClick={() => onMarkRead(notification.id)}
+                >
+                  <span>{notification.message}</span>
+                  <small>{notification.stage?.name ?? notification.type} · {formatDate(notification.createdAt)}</small>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function OrderModal({
