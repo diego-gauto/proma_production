@@ -1,8 +1,8 @@
 # PRD — Sistema de Seguimiento de Producción Textil
 
-**Versión:** 1.0 (MVP)
+**Versión:** 1.1 (MVP)
 **Estado:** Fuente de verdad para implementación
-**Última actualización:** 2026-08-21
+**Última actualización:** 2026-10-03
 
 > Este documento es la única fuente de verdad para implementar el sistema. Cualquier ambigüedad debe resolverse siguiendo lo aquí definido. Si algo no está cubierto, se documenta como supuesto explícito antes de codear.
 
@@ -21,21 +21,23 @@ Sistema web para trackear el recorrido de **órdenes de corte** de una fábrica 
 3. Soportar división de una parte en sub-partes según dos necesidades distintas: separación por lote/cantidad y separación temporal por componentes de prenda para Bordado/Estampado/espera, con reunificación antes de Confección.
 4. Dar visibilidad total a Gerencia/Producción vía dashboard (Kanban + lista).
 5. Emitir notificaciones in-app ante cuellos de botella, incumplimiento de fechas estimadas, ingreso y finalización de trabajos.
-6. Mantener maestros de Clientes, Talleres externos, Artículos y Usuarios.
+6. Mantener maestros reales de Clientes, Talleres externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
 
 ### 1.3 Usuarios objetivo
 
 | Rol de sistema | Quiénes | Permisos |
 |---|---|---|
-| **Admin** | Gerencia, Producción, Administración | Acceso total: crear/editar cualquier orden, forzar cambio de etapa de cualquier sector, ABM de clientes/artículos/talleres/usuarios, ver todos los dashboards y notificaciones |
-| **User (sector)** | Corte, Bordado, Estampado, Avíos, Confección interna, Atraque, Ojal y Botón, Plancha, Terminación | Solo puede operar (iniciar/finalizar/anotar) las etapas de su propio sector; puede ver el listado y detalle de órdenes en modo lectura |
+| **Gerencia / Producción / Administración** | Usuarios de control y gestión | Pueden ver el tablero completo, gestionar órdenes, operar o corregir etapas según permisos asignados y administrar maestros si tienen el permiso correspondiente. |
+| **Usuario de sector** | Corte, Bordado, Estampado, Avíos, Confección interna, Atraque, Ojal y Botón, Plancha, Terminación | Ve únicamente el trabajo que corresponde a sus sectores habilitados y solo puede ejecutar las acciones autorizadas para esos sectores. Ej: Bordado ve lo que tiene para bordar y carga avances de bordado; Corte ve y opera corte; Avíos ve y opera avíos. |
+| **Admin técnico/funcional** | Usuario con administración completa | Acceso total a ABM, permisos, usuarios, órdenes y configuración. |
 
-Login individual por usuario (no es login compartido por sector), aunque en la práctica cada sector suele tener un único responsable.
+Login individual por usuario. Los roles agrupan permisos, pero el acceso real se determina por permisos personalizados por sector y acción.
 
 ### 1.4 Alcance del MVP — Incluye
 
-- ABM de Clientes, Talleres Externos, Artículos, Usuarios.
-- Creación de Orden de Corte con selección de tela(s), color(es), talles/cantidades y etapas aplicables.
+- ABM de Clientes, Talleres Externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
+- Maestro de Artículos con lista de avíos requeridos y partes que pueden bordarse o estamparse.
+- Creación de Orden de Corte como asociación entre cliente, artículo, tela, curva de talles, cantidades por talle y taller/ubicación cuando aplique.
 - Chequeo de materiales de inicio de corte (completo/parcial por talle/color/parte).
 - División dinámica de una Parte en Sub-partes en cualquier etapa posterior al corte, distinguiendo divisiones por lote/cantidad de divisiones temporales por componentes decorativos.
 - Registro de inicio/fin de cada etapa por Parte, con cálculo automático de duración.
@@ -56,7 +58,6 @@ Login individual por usuario (no es login compartido por sector), aunque en la p
 - Generación/lectura de códigos QR (Fase 2).
 - Notificaciones por email o Telegram (Fase 2).
 - Integraciones externas (ERP, contable, e-commerce).
-- Maestro de artículo con avíos/etapas pre-configurados de fábrica (en MVP se seleccionan manualmente al crear cada orden; queda como mejora futura, aunque el Artículo sí guarda tela principal/secundaria y partes que se bordan/estampan como dato informativo).
 
 ### 1.6 Supuestos explícitos (a confirmar con el cliente si difieren)
 
@@ -68,6 +69,9 @@ Login individual por usuario (no es login compartido por sector), aunque en la p
 - **S6**: El estado "Arreglo" pausa visualmente la orden en el dashboard pero no bloquea que sus partes sigan operando individualmente; es informativo/de alerta, no un bloqueo duro del sistema.
 - **S7**: "Días sin movimiento" para cuello de botella se configura con un umbral por defecto de **3 días hábiles**, editable por un Admin desde configuración general (no hardcodeado).
 - **S8**: El proyecto se desarrolla completo de manera local y se suben cambios a GitHub por etapas cerradas. Se adopta **monorepo** como estructura recomendada del MVP (`backend/`, `frontend/`, `docker-compose.yml` local y documentación en el mismo repo), salvo decisión explícita posterior de separarlo.
+- **S9**: El artículo representa el producto a cortar. No tiene tela ni curva asociada de forma fija. La tela, curva, cantidades por talle, cliente y taller/ubicación se definen en la Orden de Corte.
+- **S10**: El artículo sí mantiene una lista de avíos que normalmente lleva el producto y una lista de partes de prenda que pueden bordarse o estamparse. Estos datos ayudan a crear la orden y a preparar checklists, pero no implican stock real.
+- **S11**: Los permisos no se resuelven solo por rol. Cada usuario puede tener permisos personalizados por sector y acción; los roles funcionan como plantillas o agrupadores iniciales.
 
 ---
 
@@ -144,8 +148,15 @@ order_parts (1) ──< order_parts (N)               [self-reference: parent_pa
 order_parts (1) ──< part_stage_events (N)         [historial de etapas de esa parte]
 order_parts (1) ──< part_supplies (N)             [checklist de avíos de esa parte]
 
-articles (1) ──< article_fabrics (N)              [tela principal/secundaria + para qué parte]
-supplies (1) ──< part_supplies (N)                [catálogo de avíos]
+clients (1) ──< client_contacts (N)
+workshops (1) ──< workshop_contacts (N)
+articles (1) ──< article_supplies (N)             [avíos requeridos por producto]
+articles (1) ──< article_decoration_parts (N)     [partes bordables/estampables]
+supplies (1) ──< article_supplies (N)
+supplies (1) ──< part_supplies (N)                [checklist operativo por parte]
+fabrics (1) ──< orders/order_requested_items (N)  [la tela se define en la orden, no en el artículo]
+size_curves (1) ──< order_requested_items (N)     [la curva se define en la orden]
+users (1) ──< user_permissions (N)
 stages (1) ──< part_stage_events (N)              [catálogo de etapas]
 ```
 
@@ -169,7 +180,7 @@ CREATE TYPE sector_code AS ENUM (
 
 CREATE TYPE stage_execution_type AS ENUM ('INTERNO', 'EXTERNO', 'AMBOS');
 
-CREATE TYPE size_sequence_type AS ENUM ('ALFABETICA', 'NUMERICA', 'DOBLE');
+CREATE TYPE size_sequence_type AS ENUM ('ALFABETICA', 'NUMERICA', 'DOBLE', 'MIXTA');
 
 CREATE TYPE order_status AS ENUM ('ACTIVA', 'EN_ARREGLO', 'FINALIZADA', 'CANCELADA');
 
@@ -190,6 +201,11 @@ CREATE TYPE notification_type AS ENUM (
   'CUELLO_DE_BOTELLA', 'ORDEN_EN_ARREGLO'
 );
 
+CREATE TYPE fabric_weave_type AS ENUM ('PUNTO', 'PLANO');
+CREATE TYPE fabric_format_type AS ENUM ('ABIERTO', 'TUBULAR');
+CREATE TYPE supply_category AS ENUM ('CONFECCION', 'TERMINACION');
+CREATE TYPE permission_action AS ENUM ('VER', 'CREAR', 'EDITAR', 'ELIMINAR', 'INICIAR_ETAPA', 'FINALIZAR_ETAPA', 'FORZAR_CAMBIO', 'ADMINISTRAR');
+
 -- ============================================================
 -- CATÁLOGO DE ETAPAS (configurable, no hardcodeado en código)
 -- ============================================================
@@ -206,7 +222,7 @@ CREATE TABLE stages (
 COMMENT ON TABLE stages IS 'Catálogo maestro de etapas del proceso productivo. Confección tiene excluded_from_bottleneck_alerts=true por regla de negocio.';
 
 -- ============================================================
--- USUARIOS
+-- USUARIOS, ROLES Y PERMISOS
 -- ============================================================
 CREATE TABLE users (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -214,56 +230,101 @@ CREATE TABLE users (
   email           VARCHAR(150) NOT NULL UNIQUE,
   password_hash   VARCHAR(255) NOT NULL,
   role            user_role NOT NULL DEFAULT 'USER',
-  stage_id        SMALLINT REFERENCES stages(id), -- NULL para admins; obligatorio para USER
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_users_stage ON users(stage_id) WHERE is_active = true;
-COMMENT ON COLUMN users.stage_id IS 'Sector operativo del usuario. Obligatorio si role=USER, ignorado si role=ADMIN.';
+COMMENT ON COLUMN users.role IS 'Rol base o plantilla. Los permisos efectivos se calculan con user_permissions.';
+
+CREATE TABLE user_permissions (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sector_code     sector_code,                         -- NULL = permiso global no atado a sector
+  action          permission_action NOT NULL,
+  is_allowed      BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(user_id, sector_code, action)
+);
+CREATE INDEX idx_user_permissions_user ON user_permissions(user_id);
+CREATE INDEX idx_user_permissions_sector ON user_permissions(sector_code);
+COMMENT ON TABLE user_permissions IS 'Permisos personalizados por usuario, sector y acción. Permite que Bordado solo vea/opere Bordado, Corte solo Corte, y Producción/Gerencia vean todo según configuración.';
 
 -- ============================================================
 -- CLIENTES
 -- ============================================================
 CREATE TABLE clients (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name            VARCHAR(150) NOT NULL,
-  tax_id          VARCHAR(30),                 -- CUIT u otro identificador fiscal, opcional
-  contact_name    VARCHAR(150),
-  phone           VARCHAR(50),
-  email           VARCHAR(150),
+  business_name   VARCHAR(180) NOT NULL,                -- Razón social
+  tax_id          VARCHAR(30) NOT NULL,                 -- CUIT/CUIL
+  address         VARCHAR(255),
+  locality        VARCHAR(120),
+  district        VARCHAR(120),                         -- partido/departamento
+  province        VARCHAR(120),
   notes           TEXT,
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX idx_clients_name ON clients(name);
+CREATE INDEX idx_clients_business_name ON clients(business_name);
+CREATE INDEX idx_clients_tax_id ON clients(tax_id);
+
+CREATE TABLE client_contacts (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  client_id       UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  contact_name    VARCHAR(150) NOT NULL,
+  email           VARCHAR(150),
+  fixed_phone     VARCHAR(50),
+  mobile_phone_1  VARCHAR(50),
+  mobile_phone_2  VARCHAR(50),
+  role_note       VARCHAR(120),
+  is_primary      BOOLEAN NOT NULL DEFAULT false,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_client_contacts_client ON client_contacts(client_id);
+COMMENT ON TABLE client_contacts IS 'Un cliente puede tener varios contactos. Cada contacto puede tener teléfono fijo, dos celulares mínimos previstos y email.';
 
 -- ============================================================
 -- TALLERES EXTERNOS
 -- ============================================================
 CREATE TABLE workshops (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name            VARCHAR(150) NOT NULL,
-  contact_name    VARCHAR(150),
-  phone           VARCHAR(50),
-  email           VARCHAR(150),
+  name            VARCHAR(180) NOT NULL,
   address         VARCHAR(255),
-  specialties     sector_code[] NOT NULL DEFAULT '{}', -- ej: {CONFECCION, PLANCHA}
+  locality        VARCHAR(120),
+  district        VARCHAR(120),
+  province        VARCHAR(120),
+  specialties     sector_code[] NOT NULL DEFAULT '{}', -- ej: {CONFECCION, PLANCHA, OJAL_BOTON}
   notes           TEXT,
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_workshops_active ON workshops(is_active);
+CREATE INDEX idx_workshops_name ON workshops(name);
+
+CREATE TABLE workshop_contacts (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workshop_id     UUID NOT NULL REFERENCES workshops(id) ON DELETE CASCADE,
+  contact_name    VARCHAR(150) NOT NULL,
+  email           VARCHAR(150),
+  fixed_phone     VARCHAR(50),
+  mobile_phone_1  VARCHAR(50),
+  mobile_phone_2  VARCHAR(50),
+  role_note       VARCHAR(120),
+  is_primary      BOOLEAN NOT NULL DEFAULT false,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_workshop_contacts_workshop ON workshop_contacts(workshop_id);
 
 -- ============================================================
 -- CURVAS DE TALLES (catálogo configurable)
 -- ============================================================
 CREATE TABLE size_curves (
   id              SERIAL PRIMARY KEY,
-  name            VARCHAR(100) NOT NULL,        -- ej: "Alfabética Standard", "Numérica 38-50", "Doble Pantalón"
-  sequence_type   size_sequence_type NOT NULL,
+  name            VARCHAR(100) NOT NULL,        -- ej: "Alfabética Standard", "Numérica 38-50", "Mixta Especial"
+  sequence_type   size_sequence_type NOT NULL,  -- ALFABETICA | NUMERICA | DOBLE | MIXTA
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -277,54 +338,71 @@ CREATE TABLE size_curve_values (
 CREATE INDEX idx_size_curve_values_curve ON size_curve_values(size_curve_id);
 
 -- ============================================================
--- CATÁLOGO DE TELAS Y AVÍOS
+-- CATÁLOGO DE TELAS
 -- ============================================================
 CREATE TABLE fabrics (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code            VARCHAR(80) NOT NULL,          -- artículo/código interno o del proveedor
   name            VARCHAR(150) NOT NULL,
   color           VARCHAR(80),
+  weight_oz       NUMERIC(6,2),                  -- onzaje
+  supplier        VARCHAR(150),
+  weave_type      fabric_weave_type NOT NULL,    -- PUNTO | PLANO
+  format_type     fabric_format_type NOT NULL,   -- ABIERTO | TUBULAR
   is_active       BOOLEAN NOT NULL DEFAULT true,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_fabrics_name ON fabrics(name);
-
-CREATE TYPE supply_category AS ENUM ('CONFECCION', 'TERMINACION'); -- cierres=CONFECCION, botones=TERMINACION
-
-CREATE TABLE supplies (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name            VARCHAR(150) NOT NULL,          -- ej: "Cierre 20cm negro", "Botón 4 agujeros"
-  category        supply_category NOT NULL,
-  is_active       BOOLEAN NOT NULL DEFAULT true,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX idx_supplies_category ON supplies(category);
+CREATE INDEX idx_fabrics_code ON fabrics(code);
 
 -- ============================================================
--- ARTÍCULOS
+-- CATÁLOGO DE AVÍOS
+-- ============================================================
+CREATE TABLE supplies (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code            VARCHAR(80) NOT NULL,          -- artículo/código interno o del proveedor
+  name            VARCHAR(150) NOT NULL,
+  description     TEXT,
+  color           VARCHAR(80),
+  supplier        VARCHAR(150),
+  category        supply_category NOT NULL,      -- CONFECCION | TERMINACION
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_supplies_category ON supplies(category);
+CREATE INDEX idx_supplies_code ON supplies(code);
+
+-- ============================================================
+-- ARTÍCULOS / PRODUCTOS A CORTAR
 -- ============================================================
 CREATE TABLE articles (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name            VARCHAR(150) NOT NULL,          -- ej: "Camisa de trabajo manga larga"
+  code            VARCHAR(80) NOT NULL,          -- artículo/código del producto
+  name            VARCHAR(150) NOT NULL,
   description     TEXT,
-  size_curve_id   INT REFERENCES size_curves(id), -- curva de talles por defecto sugerida
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_articles_name ON articles(name);
+CREATE INDEX idx_articles_code ON articles(code);
+COMMENT ON TABLE articles IS 'Producto a cortar. No contiene tela ni curva fija: eso se define en la orden de corte.';
 
--- Telas asociadas a un artículo (principal/secundaria) y para qué parte de la prenda es
-CREATE TABLE article_fabrics (
+CREATE TABLE article_supplies (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   article_id      UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  fabric_id       UUID NOT NULL REFERENCES fabrics(id),
-  role            VARCHAR(30) NOT NULL DEFAULT 'PRINCIPAL', -- PRINCIPAL | SECUNDARIA
-  garment_part    VARCHAR(100),                  -- ej: "Cuerpo", "Mangas", "Cuello"
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  supply_id       UUID NOT NULL REFERENCES supplies(id),
+  quantity        NUMERIC(10,2),
+  note            VARCHAR(255),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(article_id, supply_id)
 );
-CREATE INDEX idx_article_fabrics_article ON article_fabrics(article_id);
+CREATE INDEX idx_article_supplies_article ON article_supplies(article_id);
+CREATE INDEX idx_article_supplies_supply ON article_supplies(supply_id);
+COMMENT ON TABLE article_supplies IS 'Avíos habituales del artículo. Sirven como plantilla para ordenes/checklists, no como control de stock.';
 
--- Partes de la prenda que llevan bordado/estampado (informativo, ayuda a precargar la orden)
 CREATE TABLE article_decoration_parts (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   article_id      UUID NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
@@ -342,6 +420,9 @@ CREATE TABLE orders (
   external_code         VARCHAR(50) NOT NULL,          -- número asignado manualmente (sistema legado)
   client_id             UUID NOT NULL REFERENCES clients(id),
   article_id            UUID NOT NULL REFERENCES articles(id),
+  fabric_id             UUID NOT NULL REFERENCES fabrics(id),
+  size_curve_id         INT NOT NULL REFERENCES size_curves(id),
+  initial_workshop_id   UUID REFERENCES workshops(id), -- opcional; solo si la orden nace asignada a una ubicación/taller inicial
   status                order_status NOT NULL DEFAULT 'ACTIVA',
   repair_note           TEXT,                            -- nota cuando status = EN_ARREGLO
   created_by            UUID NOT NULL REFERENCES users(id),
@@ -354,8 +435,9 @@ CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_client ON orders(client_id);
 COMMENT ON COLUMN orders.internal_code IS 'PK amigable autogenerada, formato OC-AAAA-NNNNNN';
 COMMENT ON COLUMN orders.external_code IS 'Número asignado manualmente, proveniente del sistema de órdenes ya existente';
+COMMENT ON TABLE orders IS 'La orden de corte une cliente, artículo/producto, tela, curva de talles y cantidades por talle. El artículo no define tela ni curva por sí mismo.';
 
--- Detalle de talles/colores pedidos originalmente en la orden (lo que se pidió, no lo que se movió)
+-- Detalle de talles/cantidades pedidos originalmente en la orden (lo que se pidió, no lo que se movió). La tela base vive en orders.fabric_id; fabric_id aquí se usa solo si una línea necesita sobrescribirla.
 CREATE TABLE order_requested_items (
   id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id            UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -960,44 +1042,56 @@ export class RolesGuard implements CanActivate {
 | Método | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
 | GET | `/clients` | Sí | query: `?search=&active=` | `Client[]` |
-| GET | `/clients/:id` | Sí | — | `Client` |
-| POST | `/clients` | Admin | `CreateClientDto` | `Client` |
-| PATCH | `/clients/:id` | Admin | `UpdateClientDto` | `Client` |
-| DELETE | `/clients/:id` | Admin | — | `204` (soft delete: `is_active=false`) |
+| GET | `/clients/:id` | Sí | — | `Client` con `contacts[]` |
+| POST | `/clients` | Admin o permiso `ADMINISTRAR` maestro | `CreateClientDto` con razón social, CUIT/CUIL, dirección/localidad/partido/provincia y `contacts[]` | `Client` |
+| PATCH | `/clients/:id` | Admin o permiso `EDITAR` maestro | `UpdateClientDto` | `Client` |
+| DELETE | `/clients/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` (soft delete: `is_active=false`) |
 
 ### 6.3 Talleres externos
 
 | Método | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/workshops` | Sí | `?specialty=CONFECCION` | `Workshop[]` |
-| GET | `/workshops/:id` | Sí | — | `Workshop` |
-| POST | `/workshops` | Admin | `CreateWorkshopDto` | `Workshop` |
-| PATCH | `/workshops/:id` | Admin | `UpdateWorkshopDto` | `Workshop` |
-| DELETE | `/workshops/:id` | Admin | — | `204` |
+| GET | `/workshops` | Sí | `?search=&specialty=CONFECCION` | `Workshop[]` |
+| GET | `/workshops/:id` | Sí | — | `Workshop` con `contacts[]` |
+| POST | `/workshops` | Admin o permiso `ADMINISTRAR` maestro | `CreateWorkshopDto` con dirección, localidad, partido, provincia, especialidades y `contacts[]` | `Workshop` |
+| PATCH | `/workshops/:id` | Admin o permiso `EDITAR` maestro | `UpdateWorkshopDto` | `Workshop` |
+| DELETE | `/workshops/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` |
 
-### 6.4 Artículos, telas, avíos, curvas de talles
+### 6.4 Telas, avíos, curvas y artículos
 
 | Método | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
+| GET | `/fabrics` | Sí | `?search=&weaveType=&formatType=&supplier=` | `Fabric[]` |
+| GET | `/fabrics/:id` | Sí | — | `Fabric` |
+| POST | `/fabrics` | Admin o permiso `ADMINISTRAR` maestro | `CreateFabricDto` con código/artículo, nombre, color, onzaje, proveedor, tipo punto/plano y abierto/tubular | `Fabric` |
+| PATCH | `/fabrics/:id` | Admin o permiso `EDITAR` maestro | `UpdateFabricDto` | `Fabric` |
+| DELETE | `/fabrics/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` |
+| GET | `/supplies` | Sí | `?search=&category=&supplier=` | `Supply[]` |
+| GET | `/supplies/:id` | Sí | — | `Supply` |
+| POST | `/supplies` | Admin o permiso `ADMINISTRAR` maestro | `CreateSupplyDto` con código/artículo, nombre, descripción, color, proveedor y categoría confección/terminación | `Supply` |
+| PATCH | `/supplies/:id` | Admin o permiso `EDITAR` maestro | `UpdateSupplyDto` | `Supply` |
+| DELETE | `/supplies/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` |
+| GET | `/size-curves` | Sí | `?search=&sequenceType=` | `SizeCurve[]` con values |
+| GET | `/size-curves/:id` | Sí | — | `SizeCurve` con values |
+| POST | `/size-curves` | Admin o permiso `ADMINISTRAR` maestro | `CreateSizeCurveDto` con secuencia `ALFABETICA`, `NUMERICA`, `DOBLE` o `MIXTA` y valores ordenados | `SizeCurve` |
+| PATCH | `/size-curves/:id` | Admin o permiso `EDITAR` maestro | `UpdateSizeCurveDto` | `SizeCurve` |
+| DELETE | `/size-curves/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` |
 | GET | `/articles` | Sí | `?search=` | `Article[]` |
-| GET | `/articles/:id` | Sí | — | `Article` (con fabrics y decoration parts) |
-| POST | `/articles` | Admin | `CreateArticleDto` | `Article` |
-| PATCH | `/articles/:id` | Admin | `UpdateArticleDto` | `Article` |
-| GET | `/fabrics` | Sí | — | `Fabric[]` |
-| POST | `/fabrics` | Admin | `CreateFabricDto` | `Fabric` |
-| GET | `/supplies` | Sí | `?category=CONFECCION` | `Supply[]` |
-| POST | `/supplies` | Admin | `CreateSupplyDto` | `Supply` |
-| GET | `/size-curves` | Sí | — | `SizeCurve[]` (con values) |
-| POST | `/size-curves` | Admin | `CreateSizeCurveDto` | `SizeCurve` |
+| GET | `/articles/:id` | Sí | — | `Article` con `supplies[]` y `decorationParts[]` |
+| POST | `/articles` | Admin o permiso `ADMINISTRAR` maestro | `CreateArticleDto` con código, nombre, descripción, avíos y partes bordado/estampado | `Article` |
+| PATCH | `/articles/:id` | Admin o permiso `EDITAR` maestro | `UpdateArticleDto` | `Article` |
+| DELETE | `/articles/:id` | Admin o permiso `ELIMINAR` maestro | — | `204` |
 
-### 6.5 Usuarios
+### 6.5 Usuarios y permisos
 
 | Método | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/users` | Admin | — | `User[]` |
-| POST | `/users` | Admin | `CreateUserDto` | `User` |
-| PATCH | `/users/:id` | Admin | `UpdateUserDto` | `User` |
-| DELETE | `/users/:id` | Admin | — | `204` (soft delete) |
+| GET | `/users` | Admin o permiso `ADMINISTRAR` usuarios | `?search=&active=` | `User[]` con permisos |
+| GET | `/users/:id` | Admin o permiso `ADMINISTRAR` usuarios | — | `User` con permisos |
+| POST | `/users` | Admin o permiso `ADMINISTRAR` usuarios | `CreateUserDto` con email, nombre, contraseña, rol base y `permissions[]` | `User` |
+| PATCH | `/users/:id` | Admin o permiso `EDITAR` usuarios | `UpdateUserDto` | `User` |
+| DELETE | `/users/:id` | Admin o permiso `ELIMINAR` usuarios | — | `204` (soft delete) |
+| PUT | `/users/:id/permissions` | Admin o permiso `ADMINISTRAR` usuarios | `{ permissions: [{ sectorCode, action, isAllowed }] }` | `User` con permisos actualizados |
 
 ### 6.6 Etapas (catálogo)
 
@@ -1010,13 +1104,13 @@ export class RolesGuard implements CanActivate {
 
 | Método | Endpoint | Auth | Body | Response |
 |---|---|---|---|---|
-| GET | `/orders` | Sí | `?status=&clientId=&search=&stageId=` | `Order[]` (paginado) |
-| GET | `/orders/:id` | Sí | — | `Order` completo con árbol de `parts` |
-| POST | `/orders` | Sí (Corte o Admin) | `CreateOrderDto` | `Order` (crea orden + parte raíz PENDIENTE + `order_requested_items`) |
-| PATCH | `/orders/:id` | Admin | `UpdateOrderDto` | `Order` |
+| GET | `/orders` | Sí | `?status=&clientId=&articleId=&fabricId=&stageId=&search=` | `Order[]` (paginado y filtrado por permisos) |
+| GET | `/orders/:id` | Sí | — | `Order` completo con cliente, artículo, tela, curva, cantidades, avíos y árbol de `parts` |
+| POST | `/orders` | Permiso `CREAR` orden o Admin | `CreateOrderDto` con `clientId`, `articleId`, `fabricId`, `sizeCurveId`, cantidades por valor de curva y taller/ubicación inicial opcional | `Order` (crea orden + parte raíz PENDIENTE + `order_requested_items` + checklist de avíos desde el artículo) |
+| PATCH | `/orders/:id` | Permiso `EDITAR` orden o Admin | `UpdateOrderDto` | `Order` |
 | POST | `/orders/:id/repair` | Sí (sector que detecta) / Admin | `{ note: string }` | `Order` (status → EN_ARREGLO) |
 | POST | `/orders/:id/repair/resolve` | Admin | — | `Order` (status → ACTIVA) |
-| DELETE | `/orders/:id` | Admin | — | `204` (soft: status CANCELADA) |
+| DELETE | `/orders/:id` | Permiso `ELIMINAR` orden o Admin | — | `204` (soft: status CANCELADA) |
 
 ### 6.8 Partes de orden
 
@@ -1297,7 +1391,7 @@ CMD ["pnpm", "start"]
 - [ ] Migraciones: todas las tablas del DDL (§3.3)
 - [ ] Seeds: `stages`, `size_curves` base, usuario admin inicial
 - [ ] Módulo Auth (JWT + guards)
-- [ ] Módulos ABM: Clients, Workshops, Articles (+ fabrics/decoration), Fabrics, Supplies, SizeCurves, Users, Stages, Settings
+- [ ] Módulos ABM: Clients (+contacts), Workshops (+contacts), Fabrics, Supplies, SizeCurves, Articles (+supplies +decoration parts), Users (+permissions), Stages, Settings
 - [ ] Módulo Orders (crear orden + requested items + parte raíz)
 - [ ] Módulo OrderParts (split `LOTE`, split `COMPONENTE`, reunificación de componentes, consulta de árbol)
 - [ ] Módulo StageEvents (start/finish, con todas las reglas de negocio de §3.4)
@@ -1311,7 +1405,7 @@ CMD ["pnpm", "start"]
 - [ ] Setup Next.js + TypeScript + CSS Modules + variables.css
 - [ ] Login + manejo de sesión (JWT en cookie httpOnly o localStorage según decisión de seguridad)
 - [ ] Layout autenticado (Navbar + Sidebar + NotificationBell con WS)
-- [ ] Pantallas ABM: Clientes, Talleres, Artículos, Usuarios, Configuración
+- [ ] Pantallas ABM: Clientes, Talleres, Telas, Avíos, Curvas, Artículos, Usuarios/Permisos, Configuración
 - [ ] Crear Orden (formulario con selects de tela/color/talles/etapas aplicables)
 - [ ] Detalle de Orden: árbol de partes + selector de etapa a visualizar
 - [ ] Acción: iniciar/finalizar etapa (con selección interno/externo + taller)

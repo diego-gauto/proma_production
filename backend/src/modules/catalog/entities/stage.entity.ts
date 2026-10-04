@@ -5,7 +5,6 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
 import { OrderPart } from '../../orders/entities/order-part.entity';
 import { PartStageEvent } from '../../orders/entities/part-stage-event.entity';
 import { Notification } from '../../notifications/entities/notification.entity';
@@ -52,9 +51,6 @@ export class Stage {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
-
-  @OneToMany(() => User, (user) => user.stage)
-  users!: User[];
 
   @OneToMany(() => OrderPart, (part) => part.currentStage)
   currentParts!: OrderPart[];

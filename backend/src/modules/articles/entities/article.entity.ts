@@ -2,33 +2,27 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SizeCurve } from '../../catalog/entities/size-curve.entity';
 import { Order } from '../../orders/entities/order.entity';
 import { ArticleDecorationPart } from './article-decoration-part.entity';
-import { ArticleFabric } from './article-fabric.entity';
+import { ArticleSupply } from './article-supply.entity';
 
 @Entity('articles')
 export class Article {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
+  @Column({ name: 'code', type: 'varchar', length: 80 })
+  code!: string;
+
   @Column({ name: 'name', type: 'varchar', length: 150 })
   name!: string;
 
   @Column({ name: 'description', type: 'text', nullable: true })
   description?: string | null;
-
-  @ManyToOne(() => SizeCurve, (sizeCurve) => sizeCurve.articles, {
-    nullable: true,
-  })
-  @JoinColumn({ name: 'size_curve_id' })
-  sizeCurve?: SizeCurve | null;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
@@ -39,10 +33,10 @@ export class Article {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 
-  @OneToMany(() => ArticleFabric, (fabric) => fabric.article, {
+  @OneToMany(() => ArticleSupply, (supply) => supply.article, {
     cascade: ['insert', 'update'],
   })
-  fabrics!: ArticleFabric[];
+  supplies!: ArticleSupply[];
 
   @OneToMany(() => ArticleDecorationPart, (part) => part.article, {
     cascade: ['insert', 'update'],

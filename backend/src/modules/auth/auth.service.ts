@@ -23,7 +23,7 @@ export class AuthService {
   async login(email: string, password: string): Promise<LoginResult> {
     const user = await this.usersRepository.findOne({
       where: { email, isActive: true },
-      relations: { stage: true },
+      relations: { permissions: true },
     });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
@@ -35,7 +35,7 @@ export class AuthService {
       sub: authenticatedUser.id,
       email: authenticatedUser.email,
       role: authenticatedUser.role,
-      stageId: authenticatedUser.stageId,
+      stageId: null,
     };
 
     return {
@@ -49,7 +49,7 @@ export class AuthService {
   ): Promise<AuthenticatedUser | null> {
     const user = await this.usersRepository.findOne({
       where: { id, isActive: true },
-      relations: { stage: true },
+      relations: { permissions: true },
     });
 
     return user ? this.toAuthenticatedUser(user) : null;
@@ -61,7 +61,11 @@ export class AuthService {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
-      stageId: user.stage?.id ?? null,
+      permissions: (user.permissions ?? []).map((permission) => ({
+        sectorCode: permission.sectorCode,
+        action: permission.action,
+        isAllowed: permission.isAllowed,
+      })),
     };
   }
 }
