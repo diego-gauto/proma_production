@@ -23,10 +23,15 @@ import {
   SupplyCategory,
 } from './../src/modules/catalog/entities/catalog.enums';
 import {
+  OrderStatus,
   PartSplitMode,
   PartStatus,
+  SupplyCompleteness,
 } from './../src/modules/orders/entities/order.enums';
-import { UserRole } from './../src/modules/users/entities/user.enums';
+import {
+  PermissionAction,
+  UserRole,
+} from './../src/modules/users/entities/user.enums';
 
 type OrderFixture = {
   clientId: string;
@@ -169,6 +174,38 @@ describe('Orders (e2e)', () => {
       supplyId: supply[0].id as string,
     };
   }
+  async function createSectorToken(
+    label: string,
+    sectorCode: SectorCode,
+    actions: PermissionAction[],
+  ): Promise<string> {
+    const userEmail = `${label}-${suffix}@proma.test`;
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await dataSource.query(
+      `
+        INSERT INTO users (full_name, email, password_hash, role)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+      `,
+      [`Usuario ${label}`, userEmail, passwordHash, UserRole.USER],
+    );
+    for (const action of actions) {
+      await dataSource.query(
+        `
+          INSERT INTO user_permissions (user_id, sector_code, action)
+          VALUES ($1, $2, $3)
+        `,
+        [user[0].id, sectorCode, action],
+      );
+    }
+
+    const login = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: userEmail, password })
+      .expect(201);
+    return login.body.accessToken as string;
+  }
+
 
   it('creates an order with real order fabric, curve, requested items, root part and supply checklist', async () => {
     const fixture = await createOrderFixture('Crear');
@@ -470,4 +507,276 @@ describe('Orders (e2e)', () => {
       expect.objectContaining({ id: recombined.body.id }),
     ]);
   });
+
+  it('starts stages with sector permissions and validates active events and external workshops', async () => {
+    const fixture = await createOrderFixture('Start');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-START`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 5 },
+        ],
+      })
+      .expect(201);
+    const partId = created.body.parts[0].id as string;
+    const corteStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.CORTE],
+    );
+    const confeccionStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.CONFECCION],
+    );
+    const corteToken = await createSectorToken('corte-start', SectorCode.CORTE, [
+      PermissionAction.INICIAR_ETAPA,
+    ]);
+    const bordadoToken = await createSectorToken(
+      'bordado-start',
+      SectorCode.BORDADO,
+      [PermissionAction.INICIAR_ETAPA],
+    );
+
+    const started = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/start`)
+      .set('Authorization', `Bearer ${corteToken}`)
+      .send({
+        stageId: corteStage[0].id,
+        executionType: StageExecutionType.INTERNO,
+        estimatedFinishAt: new Date(Date.now() + 86400000).toISOString(),
+        note: 'Arranca corte',
+      })
+      .expect(201);
+
+    expect(started.body).toMatchObject({
+      orderPart: expect.objectContaining({
+        id: partId,
+        status: PartStatus.EN_PROCESO,
+        currentStage: expect.objectContaining({ code: SectorCode.CORTE }),
+      }),
+      stage: expect.objectContaining({ code: SectorCode.CORTE }),
+      executionType: StageExecutionType.INTERNO,
+      finishedAt: null,
+      note: 'Arranca corte',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/start`)
+      .set('Authorization', `Bearer ${corteToken}`)
+      .send({
+        stageId: corteStage[0].id,
+        executionType: StageExecutionType.INTERNO,
+      })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/start`)
+      .set('Authorization', `Bearer ${bordadoToken}`)
+      .send({
+        stageId: corteStage[0].id,
+        executionType: StageExecutionType.INTERNO,
+      })
+      .expect(403);
+
+    const other = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-START-EXT`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[1].id, quantityRequested: 3 },
+        ],
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${other.body.parts[0].id}/stage-events/start`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        stageId: confeccionStage[0].id,
+        executionType: StageExecutionType.EXTERNO,
+      })
+      .expect(400);
+  });
+
+  it('finishes stages, closes included atraque and finalizes the order when all active leaves are done', async () => {
+    const fixture = await createOrderFixture('Finish');
+    const workshop = await dataSource.query(
+      `
+        INSERT INTO workshops (name, specialties)
+        VALUES ($1, $2)
+        RETURNING id
+      `,
+      [`Taller Finish ${suffix}`, [SectorCode.CONFECCION]],
+    );
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-FINISH`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 2 },
+        ],
+      })
+      .expect(201);
+    const partId = created.body.parts[0].id as string;
+    const confeccionStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.CONFECCION],
+    );
+    const terminacionStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.TERMINACION],
+    );
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/finish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ note: 'No hay evento' })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/start`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        stageId: confeccionStage[0].id,
+        executionType: StageExecutionType.EXTERNO,
+        workshopId: workshop[0].id,
+      })
+      .expect(201);
+
+    const finishedConfeccion = await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/finish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ includesAtraque: true, note: 'Recibido con atraque' })
+      .expect(201);
+
+    expect(finishedConfeccion.body.event).toMatchObject({
+      finishedAt: expect.any(String),
+      includesAtraque: true,
+      note: 'Recibido con atraque',
+    });
+    expect(finishedConfeccion.body.includedAtraqueEvent).toMatchObject({
+      finishedAt: expect.any(String),
+      stage: expect.objectContaining({ code: SectorCode.ATRAQUE }),
+      workshop: null,
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/start`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        stageId: terminacionStage[0].id,
+        executionType: StageExecutionType.INTERNO,
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/finish`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ note: 'Terminada' })
+      .expect(201);
+
+    const detail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(detail.body.status).toBe(OrderStatus.FINALIZADA);
+    expect(detail.body.finalizedAt).toEqual(expect.any(String));
+    expect(detail.body.parts[0].status).toBe(PartStatus.FINALIZADA);
+  });
+
+  it('updates part supplies and marks and resolves order repair', async () => {
+    const fixture = await createOrderFixture('Supplies');
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-SUPPLIES`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 4 },
+        ],
+      })
+      .expect(201);
+    const partId = created.body.parts[0].id as string;
+    const aviosToken = await createSectorToken(
+      'avios-supplies',
+      SectorCode.AVIOS_CONFECCION,
+      [PermissionAction.EDITAR],
+    );
+    const bordadoToken = await createSectorToken(
+      'bordado-supplies',
+      SectorCode.BORDADO,
+      [PermissionAction.EDITAR],
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/api/v1/order-parts/${partId}/supplies/${fixture.supplyId}`)
+      .set('Authorization', `Bearer ${bordadoToken}`)
+      .send({
+        completeness: SupplyCompleteness.COMPLETO,
+        quantityAvailable: 4,
+      })
+      .expect(403);
+
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/v1/order-parts/${partId}/supplies/${fixture.supplyId}`)
+      .set('Authorization', `Bearer ${aviosToken}`)
+      .send({
+        completeness: SupplyCompleteness.PARCIAL,
+        quantityAvailable: 3,
+        note: 'Falta una tanda',
+      })
+      .expect(200);
+
+    expect(updated.body).toMatchObject({
+      completeness: SupplyCompleteness.PARCIAL,
+      quantityAvailable: 3,
+      note: 'Falta una tanda',
+      updatedBy: expect.objectContaining({
+        email: `avios-supplies-${suffix}@proma.test`,
+      }),
+      updatedAt: expect.any(String),
+    });
+
+    const repair = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${created.body.id}/repair`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ note: 'Costura para revisar' })
+      .expect(201);
+
+    expect(repair.body).toMatchObject({
+      status: OrderStatus.EN_ARREGLO,
+      repairNote: 'Costura para revisar',
+    });
+
+    const resolved = await request(app.getHttpServer())
+      .post(`/api/v1/orders/${created.body.id}/repair/resolve`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(201);
+
+    expect(resolved.body).toMatchObject({
+      status: OrderStatus.ACTIVA,
+      repairNote: null,
+    });
+  });
+
 });

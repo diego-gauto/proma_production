@@ -27,6 +27,11 @@ import {
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
+  @Get('stages')
+  findStages() {
+    return this.catalogService.findStages();
+  }
+
   @Post('fabrics')
   @Roles(UserRole.ADMIN)
   @Permissions({ action: PermissionAction.ADMINISTRAR })

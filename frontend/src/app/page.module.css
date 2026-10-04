@@ -568,3 +568,19 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+.checkboxLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d8d4f2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.checkboxLine input {
+  width: 16px;
+  height: 16px;
+  accent-color: #d9ff00;
+}

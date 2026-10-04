@@ -4,7 +4,10 @@ import { ArticleMaster, FabricMaster, SizeCurveMaster, WorkshopMaster } from "./
 export type PartSupply = {
   id: string;
   quantityNeeded?: number | null;
+  quantityAvailable?: number | null;
   completeness: string;
+  note?: string | null;
+  updatedAt?: string | null;
   supply?: { id: string; name: string; code?: string } | null;
 };
 
@@ -27,9 +30,37 @@ export type PartNode = {
     finishedAt?: string | null;
     stage?: { id: number; code: string; name: string } | null;
     workshop?: { id: string; name: string } | null;
+    executionType?: "INTERNO" | "EXTERNO" | "AMBOS";
+    note?: string | null;
+    includesAtraque?: boolean | null;
   }[];
   supplies?: PartSupply[];
   children?: PartNode[];
+};
+
+
+export type StageOption = {
+  id: number;
+  code: string;
+  name: string;
+  executionType: "INTERNO" | "EXTERNO" | "AMBOS";
+  isOptional: boolean;
+};
+
+export type StageEventResponse = {
+  id: string;
+  startedAt?: string | null;
+  estimatedFinishAt?: string | null;
+  finishedAt?: string | null;
+  executionType: "INTERNO" | "EXTERNO";
+  note?: string | null;
+  stage: StageOption;
+  orderPart: PartNode;
+};
+
+export type FinishStageResponse = {
+  event: StageEventResponse;
+  includedAtraqueEvent?: StageEventResponse | null;
 };
 
 export type OrderSummary = {
@@ -107,5 +138,69 @@ export function recombineParts(
     method: "POST",
     token,
     body: JSON.stringify(body),
+  });
+}
+
+
+export function listStages(token: string): Promise<StageOption[]> {
+  return apiRequest<StageOption[]>("/stages", { token });
+}
+
+export function startStage(
+  token: string,
+  partId: string,
+  body: Record<string, unknown>,
+): Promise<StageEventResponse> {
+  return apiRequest<StageEventResponse>(`/order-parts/${partId}/stage-events/start`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+}
+
+export function finishStage(
+  token: string,
+  partId: string,
+  body: Record<string, unknown>,
+): Promise<FinishStageResponse> {
+  return apiRequest<FinishStageResponse>(`/order-parts/${partId}/stage-events/finish`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+}
+
+export function updatePartSupply(
+  token: string,
+  partId: string,
+  supplyId: string,
+  body: Record<string, unknown>,
+): Promise<PartSupply> {
+  return apiRequest<PartSupply>(`/order-parts/${partId}/supplies/${supplyId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(body),
+  });
+}
+
+export function markOrderRepair(
+  token: string,
+  orderId: string,
+  note: string,
+): Promise<OrderSummary> {
+  return apiRequest<OrderSummary>(`/orders/${orderId}/repair`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function resolveOrderRepair(
+  token: string,
+  orderId: string,
+): Promise<OrderSummary> {
+  return apiRequest<OrderSummary>(`/orders/${orderId}/repair/resolve`, {
+    method: "POST",
+    token,
   });
 }

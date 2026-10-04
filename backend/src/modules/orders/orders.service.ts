@@ -1,17 +1,21 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, In, Repository } from 'typeorm';
+import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { Article } from '../articles/entities/article.entity';
+import { SectorCode } from '../catalog/entities/catalog.enums';
 import { Fabric } from '../catalog/entities/fabric.entity';
 import { SizeCurveValue } from '../catalog/entities/size-curve-value.entity';
 import { SizeCurve } from '../catalog/entities/size-curve.entity';
 import { Client } from '../clients/entities/client.entity';
 import { User } from '../users/entities/user.entity';
+import { PermissionAction, UserRole } from '../users/entities/user.enums';
 import { Workshop } from '../workshops/entities/workshop.entity';
 import { PaginatedResponse } from '../../common/dto/pagination-query.dto';
 import {
@@ -19,13 +23,16 @@ import {
   OrderPartsQueryDto,
   OrderQueryDto,
   RecombinePartsDto,
+  RepairOrderDto,
   SplitPartDto,
+  UpdatePartSupplyDto,
 } from './dto/order.dto';
 import { OrderPart } from './entities/order-part.entity';
 import { OrderRequestedItem } from './entities/order-requested-item.entity';
 import { Order } from './entities/order.entity';
 import { PartSupply } from './entities/part-supply.entity';
 import {
+  OrderStatus,
   PartSplitMode,
   PartStatus,
   SupplyCompleteness,
@@ -299,6 +306,59 @@ export class OrdersService {
     return this.findPart(saved.id);
   }
 
+
+  async updatePartSupply(
+    partId: string,
+    supplyId: string,
+    dto: UpdatePartSupplyDto,
+    currentUser: AuthenticatedUser,
+  ): Promise<PartSupply> {
+    this.ensurePermission(currentUser, PermissionAction.EDITAR, [
+      SectorCode.AVIOS_CONFECCION,
+      SectorCode.AVIOS_TERMINACION,
+    ]);
+    const [partSupply, user] = await Promise.all([
+      this.partSuppliesRepository.findOne({
+        where: { orderPart: { id: partId }, supply: { id: supplyId } },
+        relations: { orderPart: true, supply: true, updatedBy: true },
+      }),
+      this.findUser(currentUser.id),
+    ]);
+    if (!partSupply) {
+      throw new NotFoundException('Avio de parte no encontrado');
+    }
+
+    partSupply.completeness = dto.completeness;
+    partSupply.quantityAvailable = dto.quantityAvailable ?? null;
+    partSupply.note = dto.note ?? null;
+    partSupply.updatedBy = user;
+    const saved = await this.partSuppliesRepository.save(partSupply);
+    const reloaded = await this.partSuppliesRepository.findOne({
+      where: { id: saved.id },
+      relations: { orderPart: true, supply: true, updatedBy: true },
+    });
+    if (!reloaded) {
+      throw new NotFoundException('Avio de parte no encontrado');
+    }
+    return reloaded;
+  }
+
+  async markRepair(id: string, dto: RepairOrderDto): Promise<Order> {
+    const order = await this.findOne(id);
+    order.status = OrderStatus.EN_ARREGLO;
+    order.repairNote = dto.note;
+    await this.ordersRepository.save(order);
+    return this.findOne(id);
+  }
+
+  async resolveRepair(id: string): Promise<Order> {
+    const order = await this.findOne(id);
+    order.status = OrderStatus.ACTIVA;
+    order.repairNote = null;
+    await this.ordersRepository.save(order);
+    return this.findOne(id);
+  }
+
   private orderRelations(includeTree = false) {
     return {
       client: true,
@@ -364,6 +424,26 @@ export class OrdersService {
     return values.every((value) => value === values[0]);
   }
 
+
+  private ensurePermission(
+    user: AuthenticatedUser,
+    action: PermissionAction,
+    sectors: SectorCode[],
+  ): void {
+    if (user.role === UserRole.ADMIN) {
+      return;
+    }
+    const allowed = (user.permissions ?? []).some(
+      (permission) =>
+        permission.isAllowed &&
+        permission.action === action &&
+        (permission.sectorCode === null || sectors.includes(permission.sectorCode)),
+    );
+    if (!allowed) {
+      throw new ForbiddenException('No tenes permisos para esta accion');
+    }
+  }
+
   private async findPart(id: string): Promise<OrderPart> {
     const part = await this.orderPartsRepository.findOne({
       where: { id },
@@ -383,6 +463,8 @@ export class OrdersService {
     }
     return part;
   }
+
+
 
   private async findPartsByIds(ids: string[]): Promise<OrderPart[]> {
     return this.orderPartsRepository.find({
