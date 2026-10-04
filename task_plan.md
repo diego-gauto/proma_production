@@ -1,22 +1,23 @@
-# Etapa 4 - Ordenes de corte y partes
+# Etapa 6 - Notificaciones
 
 ## Goal
-Implementar Fase 4 del plan: creacion/listado/detalle de ordenes, arbol de partes, split/recombine y UI de listado/creacion/detalle, respetando PRD v1.1.
+Implementar Fase 6 del plan: backend de notificaciones, deteccion de cuellos de botella, fechas estimadas incumplidas y frontend con campanita/listado/marcar leidas.
 
 ## Phases
-1. Backend tests rojos para crear orden real, detalle/arbol, split y recombine. Status: complete.
-2. Backend implementacion de DTOs, entidades/relaciones faltantes, servicios y endpoints. Status: complete.
-3. Frontend API, listado, formulario y detalle/arbol con acciones. Status: complete.
-4. Verificacion: backend tests/build/e2e, frontend tests/build y smoke funcional. Status: complete.
+1. Relevar implementacion actual de notificaciones, eventos, permisos y UI. Status: complete.
+2. Backend TDD: tests rojos para endpoints, cuello de botella y vencimientos. Status: complete.
+3. Backend implementacion: servicio, controlador, schedule/configuracion y reglas anti-duplicado. Status: complete.
+4. Frontend TDD/implementacion: API, campanita, listado y marcar leidas con polling simple. Status: complete.
+5. Verificacion: build/test backend y frontend, e2e relacionado y smoke funcional. Status: complete.
 
 ## Decisions
-- Extender el sistema visual existente del frontend; no redisenar identidad.
-- Mantener cambios en rama `etapa/4-ordenes-partes` nacida desde `develop`.
-- Agregar migracion nueva `1791055200000-AddOrderCreationRelations.ts` para mapear `fabric_id`, `size_curve_id` e `initial_workshop_id` en `orders` sin editar migraciones aplicadas.
+- Trabajar en rama `etapa/6-notificaciones` nacida desde `develop`.
+- Mantener notificaciones in-app por polling en frontend, segun PRD MVP; no agregar WebSocket si no existe base previa.
+- Implementar chequeos periodicos con intervalo diario propio del modulo para no agregar `@nestjs/schedule` en esta etapa.
+- Destinatarios automaticos de cuellos de botella/vencimientos: usuarios ADMIN activos, coherente con visibilidad de control/gerencia del MVP actual.
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|
-| `error building bubblewrap command: mountinfo path is not absolute` | comandos `git status`, `find`, `rg`, script Impeccable, apply_patch y algunos pnpm en sandbox | Reintentar comandos/ediciones necesarios con `require_escalated`; registrar la causa. |
-| `next start -- -p 3000` interpreta `-p` como directorio | smoke frontend | Usar `pnpm --dir frontend exec next start -p 3002`. |
-| Puerto 3000 ocupado | smoke frontend | Verificar este build en puerto 3002. |
+| `error building bubblewrap command: mountinfo path is not absolute` | comandos `git status`, `rg`, script de planning y apply_patch en sandbox | Reintentar comandos/ediciones necesarios con `require_escalated`; registrar la causa. |
+| `pnpm run test -- --runInBand` paso `--runInBand` como patron de Jest | suite backend completa | Usar `pnpm --dir backend exec jest --runInBand` y equivalente para e2e. |

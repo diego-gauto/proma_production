@@ -584,3 +584,130 @@
   height: 16px;
   accent-color: #d9ff00;
 }
+
+.notificationBox {
+  position: relative;
+}
+
+.notificationButton {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #3a3455;
+  border-radius: 8px;
+  background: #211d35;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.notificationButton:hover,
+.notificationButton:focus-visible {
+  border-color: #d9ff00;
+  outline: none;
+}
+
+.notificationButton strong {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  padding: 0 5px;
+  background: #d9ff00;
+  color: #111018;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.notificationPanel {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  z-index: 20;
+  width: min(360px, calc(100vw - 32px));
+  border: 1px solid #3a3455;
+  border-radius: 8px;
+  background: #191829;
+  box-shadow: 0 18px 50px rgb(0 0 0 / 35%);
+}
+
+.notificationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #302c47;
+}
+
+.notificationHeader button {
+  border: 0;
+  background: transparent;
+  color: #d9ff00;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.notificationHeader button:disabled {
+  color: #736e91;
+  cursor: default;
+}
+
+.notificationList {
+  max-height: 340px;
+  overflow: auto;
+  display: grid;
+}
+
+.notificationList p {
+  margin: 0;
+  padding: 14px 12px;
+  color: #aaa6cb;
+  font-size: 13px;
+}
+
+.notificationItem,
+.notificationItemUnread {
+  display: grid;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid #302c47;
+  padding: 10px 12px;
+  background: transparent;
+  color: #f7f6ff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notificationItemUnread {
+  background: #22203a;
+}
+
+.notificationItem:hover,
+.notificationItemUnread:hover,
+.notificationItem:focus-visible,
+.notificationItemUnread:focus-visible {
+  background: #2a2452;
+  outline: none;
+}
+
+.notificationItem span,
+.notificationItemUnread span {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.notificationItem small,
+.notificationItemUnread small {
+  color: #aaa6cb;
+  font-size: 11px;
+  font-weight: 700;
+}
