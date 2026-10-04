@@ -2,3 +2,14 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   USER = 'USER',
 }
+
+export enum PermissionAction {
+  VER = 'VER',
+  CREAR = 'CREAR',
+  EDITAR = 'EDITAR',
+  ELIMINAR = 'ELIMINAR',
+  INICIAR_ETAPA = 'INICIAR_ETAPA',
+  FINALIZAR_ETAPA = 'FINALIZAR_ETAPA',
+  FORZAR_CAMBIO = 'FORZAR_CAMBIO',
+  ADMINISTRAR = 'ADMINISTRAR',
+}

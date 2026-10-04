@@ -2,8 +2,9 @@ import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { DataSource, DataSourceOptions, IsNull } from 'typeorm';
 import { ArticleDecorationPart } from '../modules/articles/entities/article-decoration-part.entity';
-import { ArticleFabric } from '../modules/articles/entities/article-fabric.entity';
+import { ArticleSupply } from '../modules/articles/entities/article-supply.entity';
 import { Article } from '../modules/articles/entities/article.entity';
+import { ClientContact } from '../modules/clients/entities/client-contact.entity';
 import { Client } from '../modules/clients/entities/client.entity';
 import { Fabric } from '../modules/catalog/entities/fabric.entity';
 import { SizeCurveValue } from '../modules/catalog/entities/size-curve-value.entity';
@@ -17,11 +18,15 @@ import { Order } from '../modules/orders/entities/order.entity';
 import { PartStageEvent } from '../modules/orders/entities/part-stage-event.entity';
 import { PartSupply } from '../modules/orders/entities/part-supply.entity';
 import { SystemSetting } from '../modules/settings/entities/system-setting.entity';
+import { UserPermission } from '../modules/users/entities/user-permission.entity';
 import { User } from '../modules/users/entities/user.entity';
+import { WorkshopContact } from '../modules/workshops/entities/workshop-contact.entity';
 import { Workshop } from '../modules/workshops/entities/workshop.entity';
 import {
   SectorCode,
   SizeSequenceType,
+  FabricFormatType,
+  FabricWeaveType,
   StageExecutionType,
   SupplyCategory,
 } from '../modules/catalog/entities/catalog.enums';
@@ -64,10 +69,13 @@ describe('phase one data model', () => {
         Fabric,
         Supply,
         User,
+        UserPermission,
         Client,
+        ClientContact,
         Workshop,
+        WorkshopContact,
         Article,
-        ArticleFabric,
+        ArticleSupply,
         ArticleDecorationPart,
         Order,
         OrderRequestedItem,
@@ -129,27 +137,18 @@ describe('phase one data model', () => {
     expect(curves.every((curve) => curve.values.length >= 3)).toBe(true);
   });
 
-  it('stores articles with fabrics and decoration parts through TypeORM relations', async () => {
-    const sizeCurve = await connection
-      .getRepository(SizeCurve)
-      .findOneByOrFail({
-        sequenceType: SizeSequenceType.ALFABETICA,
-      });
-    const mainFabric = await connection
-      .getRepository(Fabric)
-      .save({ name: 'Gabardina', color: 'Azul' });
-    const secondaryFabric = await connection
-      .getRepository(Fabric)
-      .save({ name: 'Ripstop', color: 'Negro' });
+  it('stores articles with supplies and decoration parts through TypeORM relations', async () => {
+    const supply = await connection.getRepository(Supply).save({
+      code: `AVIO-${randomUUID()}`,
+      name: 'Boton reforzado',
+      category: SupplyCategory.CONFECCION,
+    });
 
     const article = await connection.getRepository(Article).save({
+      code: `ART-${randomUUID()}`,
       name: 'Camisa de trabajo',
       description: 'Manga larga',
-      sizeCurve,
-      fabrics: [
-        { fabric: mainFabric, role: 'PRINCIPAL', garmentPart: 'Cuerpo' },
-        { fabric: secondaryFabric, role: 'SECUNDARIA', garmentPart: 'Cuello' },
-      ],
+      supplies: [{ supply, quantity: '4.00', note: 'Frente' }],
       decorationParts: [
         { garmentPart: 'Manga izquierda', decorationType: 'BORDADO' },
       ],
@@ -157,15 +156,12 @@ describe('phase one data model', () => {
 
     const stored = await connection.getRepository(Article).findOneOrFail({
       where: { id: article.id },
-      relations: { fabrics: { fabric: true }, decorationParts: true },
+      relations: { supplies: { supply: true }, decorationParts: true },
     });
 
-    expect(stored.fabrics).toHaveLength(2);
+    expect(stored.supplies).toHaveLength(1);
+    expect(stored.supplies[0].supply.name).toBe('Boton reforzado');
     expect(stored.decorationParts).toHaveLength(1);
-    expect(stored.fabrics.map((fabric) => fabric.role).sort()).toEqual([
-      'PRINCIPAL',
-      'SECUNDARIA',
-    ]);
   });
 
   it('stores orders with root and child parts, split metadata, events, supplies, and notifications', async () => {
@@ -180,10 +176,20 @@ describe('phase one data model', () => {
       });
     const fabric = await connection
       .getRepository(Fabric)
-      .save({ name: 'Grafa', color: 'Verde' });
+      .save({
+        code: `TELA-${randomUUID()}`,
+        name: 'Grafa',
+        color: 'Verde',
+        weaveType: FabricWeaveType.PUNTO,
+        formatType: FabricFormatType.ABIERTO,
+      });
     const supply = await connection
       .getRepository(Supply)
-      .save({ name: 'Cierre 20cm', category: SupplyCategory.CONFECCION });
+      .save({
+        code: `AVIO-${randomUUID()}`,
+        name: 'Cierre 20cm',
+        category: SupplyCategory.CONFECCION,
+      });
     const user = await connection.getRepository(User).save({
       fullName: 'Admin Proma',
       email: `admin-${randomUUID()}@proma.test`,
@@ -192,10 +198,10 @@ describe('phase one data model', () => {
     });
     const client = await connection
       .getRepository(Client)
-      .save({ name: 'Cliente Test' });
+      .save({ businessName: 'Cliente Test', taxId: '30-00000000-0' });
     const article = await connection.getRepository(Article).save({
+      code: `ART-${randomUUID()}`,
       name: 'Pantalon cargo',
-      sizeCurve: sizeValue.sizeCurve,
     });
 
     const order = await connection.getRepository(Order).save({

@@ -1,0 +1,22 @@
+.field {
+  display: grid;
+  gap: 6px;
+  color: #9da3d3;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field select {
+  min-height: 42px;
+  border: 1px solid #343156;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: #11111d;
+  font: inherit;
+}
+
+.field select:focus {
+  border-color: #5b22f0;
+  outline: 3px solid rgb(91 34 240 / 28%);
+}
