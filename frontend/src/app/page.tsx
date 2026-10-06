@@ -39,8 +39,19 @@ import {
   NotificationItem,
 } from "../lib/api/notifications.api";
 import {
+  adjustFabricRollStock,
+  adjustSupplyStock,
   createFabricStockEntry,
   createSupplyStockEntry,
+  FabricStockDetail,
+  FabricStockRow,
+  getFabricStockDetail,
+  getSupplyStockDetail,
+  listFabricStock,
+  listSupplyStock,
+  StockAdjustmentReason,
+  SupplyStockDetail,
+  SupplyStockRow,
 } from "../lib/api/inventory.api";
 import {
   createOrder,
@@ -71,7 +82,7 @@ type MasterItem =
   | SizeCurveMaster
   | UserMaster;
 type FormState = Record<string, string>;
-type MainView = "orders" | "sectors" | "masters";
+type MainView = "orders" | "sectors" | "masters" | "stock";
 const resources: {
   key: MasterName;
   label: string;
@@ -92,6 +103,7 @@ const resourceKeys = new Set<MasterName>(resources.map((resource) => resource.ke
 
 function pathForView(view: MainView, resource: MasterName): string {
   if (view === "sectors") return "/sectores";
+  if (view === "stock") return "/stock";
   if (view === "masters") return `/gestion/${resource}`;
   return "/ordenes";
 }
@@ -100,6 +112,9 @@ function viewStateFromPath(pathname: string): { view: MainView; resource?: Maste
   const segments = pathname.split("/").filter(Boolean);
   if (segments[0] === "sectores") {
     return { view: "sectors" };
+  }
+  if (segments[0] === "stock") {
+    return { view: "stock" };
   }
   if (segments[0] === "gestion") {
     const resource = segments[1] as MasterName | undefined;
@@ -130,6 +145,13 @@ export default function Home() {
   const [error, setError] = useState("");
   const [modalItem, setModalItem] = useState<MasterItem | "new" | null>(null);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
+  const [stockKind, setStockKind] = useState<"fabric" | "supply">("fabric");
+  const [fabricStock, setFabricStock] = useState<FabricStockRow[]>([]);
+  const [supplyStock, setSupplyStock] = useState<SupplyStockRow[]>([]);
+  const [stockTotal, setStockTotal] = useState(0);
+  const [stockPage, setStockPage] = useState(1);
+  const [stockLimit] = useState(20);
+  const [stockDetail, setStockDetail] = useState<FabricStockDetail | SupplyStockDetail | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -150,6 +172,7 @@ export default function Home() {
     setSummary(null);
     setModalItem(null);
     setIsStockModalOpen(false);
+    setStockDetail(null);
     setIsOrderModalOpen(false);
     setSelectedOrderId(null);
     setNotifications([]);
@@ -257,6 +280,41 @@ export default function Home() {
       void loadOrders();
     }
   }, [loadOrders, mainView, session]);
+
+  const loadStock = useCallback(async (nextSearch = search, nextPage = stockPage, nextKind = stockKind) => {
+    if (!session) {
+      return;
+    }
+    setIsLoading(true);
+    setError("");
+    try {
+      if (nextKind === "fabric") {
+        const result = await listFabricStock(session.accessToken, nextSearch, nextPage, stockLimit);
+        setFabricStock(result.items);
+        setStockTotal(result.total);
+        setStockPage(result.page);
+      } else {
+        const result = await listSupplyStock(session.accessToken, nextSearch, nextPage, stockLimit);
+        setSupplyStock(result.items);
+        setStockTotal(result.total);
+        setStockPage(result.page);
+      }
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        clearStoredSession("La sesion vencio. Ingresá nuevamente.");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "No se pudo cargar stock");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [clearStoredSession, search, session, stockKind, stockLimit, stockPage]);
+
+  useEffect(() => {
+    if (session && mainView === "stock") {
+      void loadStock();
+    }
+  }, [loadStock, mainView, session]);
 
   const loadNotifications = useCallback(async () => {
     if (!session) {
@@ -405,6 +463,16 @@ export default function Home() {
               Gestión
             </button>
           ) : null}
+          <button
+            className={mainView === "stock" ? styles.navActive : ""}
+            type="button"
+            onClick={() => {
+              navigateToView("stock");
+            }}
+          >
+            <span className={`${styles.navIcon} ${styles.iconStock}`} aria-hidden="true" />
+            Stock
+          </button>
           <button className={styles.navMuted} type="button" disabled>
             <span className={`${styles.navIcon} ${styles.iconReports}`} aria-hidden="true" />
             Reportes
@@ -417,6 +485,8 @@ export default function Home() {
               event.preventDefault();
               if (mainView === "orders" || mainView === "sectors") {
                 void loadOrders();
+              } else if (mainView === "stock") {
+                void loadStock(search, 1);
               } else {
                 void loadItems();
               }
@@ -466,8 +536,8 @@ export default function Home() {
       <section className={styles.content}>
         <header className={styles.heroHeader}>
           <div>
-            <p className={styles.breadcrumb}>Producción / {mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Vista general"} · {formatTodayLabel()}</p>
-            <h1>{mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Órdenes de corte"}</h1>
+            <p className={styles.breadcrumb}>Producción / {mainView === "masters" ? "Gestión" : mainView === "stock" ? "Stock" : mainView === "sectors" ? "Sectores" : "Vista general"} · {formatTodayLabel()}</p>
+            <h1>{mainView === "masters" ? "Gestión" : mainView === "stock" ? "Stock" : mainView === "sectors" ? "Sectores" : "Órdenes de corte"}</h1>
           </div>
           {mainView === "sectors" ? (
             <div className={styles.viewToggle}>
@@ -518,6 +588,8 @@ export default function Home() {
               event.preventDefault();
               if (mainView === "orders" || mainView === "sectors") {
                 void loadOrders();
+              } else if (mainView === "stock") {
+                void loadStock(search, 1);
               } else {
                 void loadItems();
               }
@@ -538,18 +610,16 @@ export default function Home() {
             onClick={() => {
               if (mainView === "masters") {
                 setModalItem("new");
+              } else if (mainView === "stock") {
+                setIsStockModalOpen(true);
               } else {
                 setIsOrderModalOpen(true);
               }
             }}
           >
-            {mainView === "masters" ? `Nuevo ${activeResource.singular}` : "Nueva orden de corte"}
+            {mainView === "masters" ? `Nuevo ${activeResource.singular}` : mainView === "stock" ? "Nuevo ingreso" : "Nueva orden de corte"}
           </Button>
-          {mainView === "masters" ? (
-            <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
-              Nuevo ingreso
-            </Button>
-          ) : null}
+
         </section>
 
         {error ? <p className={styles.error}>{error}</p> : null}
@@ -567,6 +637,25 @@ export default function Home() {
             sectorDisplayMode={sectorDisplayMode}
             onNewOrder={() => setIsOrderModalOpen(true)}
           />
+        ) : mainView === "stock" ? (
+          <StockView
+            kind={stockKind}
+            fabricRows={fabricStock}
+            supplyRows={supplyStock}
+            total={stockTotal}
+            page={stockPage}
+            limit={stockLimit}
+            onKindChange={(nextKind) => {
+              setStockKind(nextKind);
+              setStockPage(1);
+              setStockDetail(null);
+              void loadStock(search, 1, nextKind);
+            }}
+            onOpenFabric={async (fabricId) => setStockDetail(await getFabricStockDetail(session.accessToken, fabricId))}
+            onOpenSupply={async (supplyId) => setStockDetail(await getSupplyStockDetail(session.accessToken, supplyId))}
+            onNewEntry={() => setIsStockModalOpen(true)}
+            onPageChange={(nextPage) => void loadStock(search, nextPage)}
+          />
         ) : (
           <section className={styles.managementPanel}>
             <header className={styles.sectionTitleRow}>
@@ -580,9 +669,7 @@ export default function Home() {
                   <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
                   {`Nuevo ${activeResource.singular}`}
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
-                  Ingreso stock
-                </Button>
+
               </div>
             </header>
             <Table
@@ -637,15 +724,235 @@ export default function Home() {
       {isStockModalOpen ? (
         <StockEntryModal
           token={session.accessToken}
+          initialKind={stockKind}
           onClose={() => setIsStockModalOpen(false)}
           onSaved={() => {
             setIsStockModalOpen(false);
             setError("");
+            if (mainView === "stock") {
+              void loadStock(search, stockPage);
+            }
+          }}
+        />
+      ) : null}
+
+      {stockDetail ? (
+        <StockDetailModal
+          detail={stockDetail}
+          kind={"rolls" in stockDetail ? "fabric" : "supply"}
+          token={session.accessToken}
+          onClose={() => setStockDetail(null)}
+          onChanged={async () => {
+            if ("rolls" in stockDetail) {
+              setStockDetail(await getFabricStockDetail(session.accessToken, stockDetail.fabric.id));
+            } else {
+              setStockDetail(await getSupplyStockDetail(session.accessToken, stockDetail.supply.id));
+            }
+            await loadStock(search, stockPage);
           }}
         />
       ) : null}
     </main>
   );
+}
+
+
+function StockView({
+  kind,
+  fabricRows,
+  supplyRows,
+  total,
+  page,
+  limit,
+  onKindChange,
+  onOpenFabric,
+  onOpenSupply,
+  onNewEntry,
+  onPageChange,
+}: {
+  kind: "fabric" | "supply";
+  fabricRows: FabricStockRow[];
+  supplyRows: SupplyStockRow[];
+  total: number;
+  page: number;
+  limit: number;
+  onKindChange: (kind: "fabric" | "supply") => void;
+  onOpenFabric: (fabricId: string) => void;
+  onOpenSupply: (supplyId: string) => void;
+  onNewEntry: () => void;
+  onPageChange: (page: number) => void;
+}) {
+  return (
+    <section className={styles.managementPanel}>
+      <header className={styles.sectionTitleRow}>
+        <div>
+          <p className={styles.catalogEyebrow}>Inventario</p>
+          <h2>{kind === "fabric" ? "Telas" : "Avíos"}</h2>
+          <p>{total} artículos con control de stock</p>
+        </div>
+        <div className={styles.sectionActions}>
+          <div className={styles.stockTypeSwitch} role="group" aria-label="Sector de stock">
+            <button type="button" className={kind === "fabric" ? styles.stockTypeActive : ""} onClick={() => onKindChange("fabric")}>
+              Telas
+            </button>
+            <button type="button" className={kind === "supply" ? styles.stockTypeActive : ""} onClick={() => onKindChange("supply")}>
+              Avíos
+            </button>
+          </div>
+          <Button type="button" onClick={onNewEntry}>
+            <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
+            Nuevo ingreso
+          </Button>
+        </div>
+      </header>
+
+      {kind === "fabric" ? (
+        <div className={styles.ordersTableWrap}>
+          <table className={styles.ordersTable}>
+            <thead>
+              <tr>
+                <th>Tela</th>
+                <th>Color</th>
+                <th>Rollos</th>
+                <th>Original</th>
+                <th>Disponible</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fabricRows.length === 0 ? (
+                <tr><td colSpan={5} className={styles.emptyState}>Sin telas para mostrar</td></tr>
+              ) : fabricRows.map((row) => (
+                <tr key={row.fabric.id} onClick={() => onOpenFabric(row.fabric.id)} tabIndex={0}>
+                  <td><span className={styles.orderCode}>{row.fabric.code}</span><span className={styles.orderMeta}>{row.fabric.name}</span></td>
+                  <td>{row.fabric.color ?? "Sin color"}</td>
+                  <td>{row.rollCount}</td>
+                  <td>{formatQuantity(row.originalQuantity)}</td>
+                  <td>{formatQuantity(row.currentQuantity)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className={styles.ordersTableWrap}>
+          <table className={styles.ordersTable}>
+            <thead>
+              <tr>
+                <th>Avío</th>
+                <th>Categoría</th>
+                <th>Color</th>
+                <th>Disponible</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supplyRows.length === 0 ? (
+                <tr><td colSpan={4} className={styles.emptyState}>Sin avíos para mostrar</td></tr>
+              ) : supplyRows.map((row) => (
+                <tr key={row.supply.id} onClick={() => onOpenSupply(row.supply.id)} tabIndex={0}>
+                  <td><span className={styles.orderCode}>{row.supply.code}</span><span className={styles.orderMeta}>{row.supply.name}</span></td>
+                  <td>{row.supply.category}</td>
+                  <td>{row.supply.color ?? "Sin color"}</td>
+                  <td>{formatQuantity(row.currentQuantity)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pagination page={page} limit={limit} total={total} onPageChange={onPageChange} />
+    </section>
+  );
+}
+
+
+function StockDetailModal({
+  detail,
+  kind,
+  token,
+  onClose,
+  onChanged,
+}: {
+  detail: FabricStockDetail | SupplyStockDetail;
+  kind: "fabric" | "supply";
+  token: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [targetId, setTargetId] = useState("");
+  const [quantityDelta, setQuantityDelta] = useState("");
+  const [reason, setReason] = useState<StockAdjustmentReason>("CORRECCION");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const isFabric = kind === "fabric" && "rolls" in detail;
+  const supplyDetail = detail as SupplyStockDetail;
+  const title = isFabric ? detail.fabric.name : supplyDetail.supply.name;
+
+  useEffect(() => {
+    setTargetId(isFabric ? detail.rolls[0]?.id ?? "" : supplyDetail.supply.id);
+  }, [detail, isFabric, supplyDetail.supply.id]);
+
+  async function handleAdjustment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const delta = Number(quantityDelta);
+    if (!Number.isFinite(delta) || delta === 0) {
+      setError("Cargá una cantidad distinta de cero.");
+      return;
+    }
+    try {
+      if (isFabric) {
+        await adjustFabricRollStock(token, targetId, { quantityDelta: delta, reason, note: note || undefined });
+      } else {
+        await adjustSupplyStock(token, targetId, { quantityDelta: delta, reason, note: note || undefined });
+      }
+      setQuantityDelta("");
+      setNote("");
+      setError("");
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo ajustar stock");
+    }
+  }
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div className={styles.detailPanel}>
+        <section className={styles.orderSummaryGrid}>
+          <span><strong>Disponible</strong>{formatQuantity(detail.currentQuantity)}</span>
+          <span><strong>Tipo</strong>{isFabric ? "Tela" : "Avío"}</span>
+          <span><strong>Registros</strong>{isFabric ? detail.rollCount : supplyDetail.entries.length}</span>
+          <span><strong>Original</strong>{formatQuantity(isFabric ? detail.originalQuantity : detail.currentQuantity)}</span>
+        </section>
+        <div className={styles.ordersTableWrap}>
+          <table className={styles.ordersTable}>
+            {isFabric ? (
+              <>
+                <thead><tr><th>Rollo</th><th>Lote</th><th>Proveedor</th><th>Original</th><th>Disponible</th></tr></thead>
+                <tbody>{detail.rolls.map((roll) => <tr key={roll.id}><td>{roll.code}</td><td>{roll.lot}</td><td>{roll.providerName}</td><td>{formatQuantity(roll.originalQuantity)}</td><td>{formatQuantity(roll.currentQuantity)}</td></tr>)}</tbody>
+              </>
+            ) : (
+              <>
+                <thead><tr><th>Fecha</th><th>Proveedor</th><th>Comprobante</th><th>Cantidad</th></tr></thead>
+                <tbody>{supplyDetail.entries.map((entry) => <tr key={entry.id}><td>{formatDate(entry.entryDate)}</td><td>{entry.providerName}</td><td>{entry.documentNumber ?? "Sin comprobante"}</td><td>{formatQuantity(entry.quantity)}</td></tr>)}</tbody>
+              </>
+            )}
+          </table>
+        </div>
+        <form className={styles.actionPanel} onSubmit={handleAdjustment}>
+          <h2>Ajuste / uso manual</h2>
+          {isFabric ? <Select label="Rollo" value={targetId} onChange={(event) => setTargetId(event.target.value)} options={detail.rolls.map((roll) => ({ value: roll.id, label: roll.code + " - queda " + formatQuantity(roll.currentQuantity) }))} /> : null}
+          <Input label="Cantidad +/-" type="number" step="0.01" value={quantityDelta} onChange={(event) => setQuantityDelta(event.target.value)} required />
+          <Select label="Motivo" value={reason} onChange={(event) => setReason(event.target.value as StockAdjustmentReason)} options={["CORRECCION", "USO", "ROTURA", "DEVOLUCION"].map((value) => ({ value, label: value }))} />
+          <Input label="Nota" value={note} onChange={(event) => setNote(event.target.value)} />
+          <Button type="submit">Guardar ajuste</Button>
+        </form>
+        {error ? <p className={styles.error}>{error}</p> : null}
+      </div>
+    </Modal>
+  );
+}
+
+function formatQuantity(value: number): string {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
 }
 
 function OrdersView({
@@ -1802,17 +2109,19 @@ function buildColumns(resource: MasterName) {
 
 function StockEntryModal({
   token,
+  initialKind = "fabric",
   onClose,
   onSaved,
 }: {
   token: string;
+  initialKind?: "fabric" | "supply";
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [providers, setProviders] = useState<ProviderMaster[]>([]);
   const [fabrics, setFabrics] = useState<FabricMaster[]>([]);
   const [supplies, setSupplies] = useState<SupplyMaster[]>([]);
-  const [kind, setKind] = useState<"fabric" | "supply">("fabric");
+  const [kind, setKind] = useState<"fabric" | "supply">(initialKind);
   const [form, setForm] = useState<FormState>({
     providerId: "",
     fabricId: "",
@@ -1923,8 +2232,8 @@ function StockEntryModal({
         </div>
         {kind === "fabric" ? (
           <label className={styles.textAreaLabel}>
-            Rollos: código|lote
-            <textarea value={form.rolls} onChange={(event) => setValue("rolls", event.target.value)} placeholder={"R001|Lote A\nR002|Lote A"} required />
+            Rollos: código|lote|cantidad
+            <textarea value={form.rolls} onChange={(event) => setValue("rolls", event.target.value)} placeholder={"R001|Lote A|25\nR002|Lote A|30"} required />
           </label>
         ) : null}
         <label className={styles.textAreaLabel}>
@@ -2347,10 +2656,10 @@ function parseRolls(value: string) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [code, lot] = entry.split("|").map((part) => part.trim());
-      return { code, lot };
+      const [code, lot, quantity] = entry.split("|").map((part) => part.trim());
+      return { code, lot, quantity: Number(quantity) };
     })
-    .filter((roll) => roll.code && roll.lot);
+    .filter((roll) => roll.code && roll.lot && Number.isFinite(roll.quantity) && roll.quantity > 0);
 }
 
 function todayInputDate(): string {

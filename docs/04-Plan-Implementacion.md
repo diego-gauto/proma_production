@@ -200,18 +200,40 @@
 - `pnpm --dir frontend run build` y `pnpm --dir frontend run test`.
 
 
-### Etapa 3.9 — Proveedores e ingresos básicos de stock
+### Etapa 3.9 — Proveedores e ingresos de stock
 **Tareas**:
 - CRUD de proveedores con razón social, CUIT/CUIL opcional, dirección completa, notas y contactos.
 - Crear ingresos de tela asociados a proveedor y tela. Cada ingreso contiene fecha, comprobante opcional, nota y uno o más rollos.
-- Cada rollo de tela guarda `code` y `lot`; el stock de tela se calcula como sumatoria de rollos.
+- Cada rollo de tela guarda `code`, `lot`, `original_quantity` y `current_quantity`; el stock de tela se calcula como sumatoria de rollos.
 - Crear ingresos de avíos asociados a proveedor y avío, con fecha, comprobante opcional y cantidad.
 - No incluir precio/costo en esta etapa.
-- Frontend: agregar acceso desde Gestión para registrar ingresos de tela por rollos e ingresos de avíos por cantidad, usando Proveedor como dato obligatorio.
+- Frontend: agregar los formularios de ingreso de tela por rollos e ingresos de avíos por cantidad, usando Proveedor como dato obligatorio. Desde Etapa 3.10 estos formularios viven dentro de la ruta Stock, no dentro de Gestión.
 **Tests**:
 - e2e: telas y avíos rechazan `supplier` en payload.
-- e2e: crear proveedor, ingreso de tela con rollos y entrada de avío con cantidad.
+- e2e: crear proveedor, ingreso de tela con rollos y cantidades, y entrada de avío con cantidad.
 - `migration:run` y `migration:revert` de la migración nueva.
+
+### Etapa 3.10 — Stock operativo de Telas y Avíos
+**Objetivo**: separar Stock de Gestión y permitir control operativo básico de inventario sin llegar todavía a costos, reservas ni consumo automático por orden.
+**Tareas**:
+- Agregar acceso principal `Stock` en la barra superior.
+- Crear ruta frontend `/stock` con dos sectores: Telas y Avíos.
+- Vista general de Telas: listar cada tela con código, descripción, color, cantidad de rollos, cantidad original total y cantidad disponible total.
+- Vista detalle de Tela: listar rollos de esa tela con código, lote, proveedor, cantidad original, cantidad disponible y movimientos asociados.
+- Vista general de Avíos: listar cada avío con código, descripción, categoría, color y stock disponible total.
+- Vista detalle de Avío: listar ingresos/compras, movimientos y stock disponible.
+- Mover el ingreso de stock fuera de Gestión: los ingresos/compras se cargan desde Stock dentro del sector correspondiente.
+- Agregar ajustes manuales de stock para rollos de tela y avíos con motivo `USO`, `CORRECCION`, `ROTURA` o `DEVOLUCION`.
+- Crear migración nueva para `stock_adjustments` y columnas `original_quantity/current_quantity` en `fabric_rolls`.
+- Validar que ningún ajuste deje stock negativo.
+- No implementar todavía descuento automático por orden de corte; eso queda pendiente hasta definir cuándo se consume material dentro del flujo productivo.
+**Tests / verificación**:
+- Frontend: tests del cliente API para listados, detalle, ingresos y ajustes.
+- Backend e2e: crear ingresos de tela/avío, consultar saldos/detalles y registrar ajustes.
+- `pnpm --dir backend run build`, `pnpm --dir backend run test`, `pnpm --dir backend run test:e2e -- masters.e2e-spec.ts`.
+- `pnpm --dir frontend run build`, `pnpm --dir frontend test`.
+- `migration:run`, `migration:revert` y nueva ejecución de `migration:run` contra la base local.
+- Verificación funcional: `/stock` responde sin error y permite navegar entre Telas/Avíos.
 
 **Cierre de Fase 3**: Admin puede loguearse y gestionar completamente Clientes, Proveedores, Talleres, Telas, Avíos, Curvas, Artículos y Usuarios/Permisos desde el navegador. Las bajas de maestros quedan como desactivaciones lógicas con `deleted_at`, no borrados físicos. Los permisos personalizados ya afectan lo que cada usuario puede ver/operar.
 

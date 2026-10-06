@@ -1430,6 +1430,12 @@
   -webkit-mask: url("/icons/sliders-horizontal.svg") center / contain no-repeat;
 }
 
+.iconStock {
+  mask: url("/icons/layers.svg") center / contain no-repeat;
+
+  -webkit-mask: url("/icons/layers.svg") center / contain no-repeat;
+}
+
 .iconReports {
   mask: url("/icons/chart-no-axes-combined.svg") center / contain no-repeat;
 

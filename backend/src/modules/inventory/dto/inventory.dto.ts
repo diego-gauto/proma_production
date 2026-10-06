@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -13,6 +14,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { StockAdjustmentReason } from '../entities/stock-adjustment.entity';
 
 export class ProviderContactDto {
   @IsString()
@@ -105,6 +107,11 @@ export class FabricRollDto {
   @IsString()
   @MaxLength(80)
   lot!: string;
+
+  @IsNumber()
+  @Min(0.01)
+  @Type(() => Number)
+  quantity!: number;
 }
 
 export class CreateFabricStockEntryDto {
@@ -152,6 +159,22 @@ export class CreateSupplyStockEntryDto {
   @Min(0.01)
   @Type(() => Number)
   quantity!: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+
+export class StockQueryDto extends PaginationQueryDto {}
+
+export class CreateStockAdjustmentDto {
+  @IsNumber()
+  @Type(() => Number)
+  quantityDelta!: number;
+
+  @IsEnum(StockAdjustmentReason)
+  reason!: StockAdjustmentReason;
 
   @IsOptional()
   @IsString()
