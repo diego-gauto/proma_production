@@ -10,6 +10,7 @@ import { AddOrderCreationRelations1791055200000 } from './migrations/17910552000
 import { AddProvidersAndStockEntries1791055300000 } from './migrations/1791055300000-AddProvidersAndStockEntries';
 import { AddWorkshopSpecialtyDetail1791055400000 } from './migrations/1791055400000-AddWorkshopSpecialtyDetail';
 import { AddDeletedAtToMasters1791055500000 } from './migrations/1791055500000-AddDeletedAtToMasters';
+import { AddStockAdjustments1791055600000 } from './migrations/1791055600000-AddStockAdjustments';
 
 config({ path: ['.env.local', '.env'] });
 
@@ -28,6 +29,7 @@ export default new DataSource({
     AddOrderCreationRelations1791055200000,
     AddProvidersAndStockEntries1791055300000,
     AddWorkshopSpecialtyDetail1791055400000,
-      AddDeletedAtToMasters1791055500000,
+    AddDeletedAtToMasters1791055500000,
+    AddStockAdjustments1791055600000,
   ],
 });
