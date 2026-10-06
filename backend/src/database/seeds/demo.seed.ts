@@ -1,4 +1,6 @@
 import * as bcrypt from 'bcrypt';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { DataSource } from 'typeorm';
 import {
   FabricFormatType,
@@ -14,19 +16,59 @@ import { PermissionAction, UserRole } from '../../modules/users/entities/user.en
 type IdRow = { id: string };
 type NumericIdRow = { id: number };
 
-const DEMO_PASSWORD = 'Demo-Proma-123';
+type DemoPermission = { sectorCode: SectorCode | null; action: PermissionAction };
+type DemoData = {
+  password: string;
+  users: { fullName: string; email: string; role: UserRole; permissions: DemoPermission[] }[];
+  clients: { businessName: string; taxId: string }[];
+  workshops: { name: string; specialties: SectorCode[] }[];
+  fabrics: { code: string; name: string }[];
+  supplies: { code: string; name: string; category: SupplyCategory }[];
+  sizeCurve: { name: string; sequenceType: SizeSequenceType; values: string[] };
+  articles: { code: string; name: string }[];
+  orders: {
+    externalCode: string;
+    internalCode: string;
+    clientTaxId: string;
+    articleCode: string;
+    fabricCode: string;
+    sizeLabel: string;
+    quantity: number;
+    orderStatus?: OrderStatus;
+    repairNote?: string;
+    partStatus: PartStatus;
+    stageCode?: SectorCode;
+    executionType?: StageExecutionType;
+    workshopName?: string;
+    estimatedDaysOffset?: number;
+    finalized?: boolean;
+  }[];
+};
+
+function loadDemoData(): DemoData {
+  const filePath = join(__dirname, '..', 'data', 'demo-data.json');
+  return JSON.parse(readFileSync(filePath, 'utf8')) as DemoData;
+}
 
 export async function seedDemoData(dataSource: DataSource): Promise<void> {
+  const demoData = loadDemoData();
   await dataSource.transaction(async (manager) => {
-    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
-    const admin = await upsertUser(
-      manager,
-      'Admin Demo',
-      'admin@demo.proma.local',
-      UserRole.ADMIN,
-      passwordHash,
-      [],
-    );
+    const passwordHash = await bcrypt.hash(demoData.password, 10);
+    const usersByEmail = new Map<string, IdRow>();
+
+    for (const user of demoData.users) {
+      usersByEmail.set(
+        user.email,
+        await upsertUser(
+          manager,
+          user.fullName,
+          user.email,
+          user.role,
+          passwordHash,
+          user.permissions,
+        ),
+      );
+    }
 
     for (const sector of Object.values(SectorCode)) {
       await upsertUser(
@@ -42,117 +84,76 @@ export async function seedDemoData(dataSource: DataSource): Promise<void> {
         ],
       );
     }
-    await upsertUser(
-      manager,
-      'Produccion Demo',
-      'produccion@demo.proma.local',
-      UserRole.USER,
-      passwordHash,
-      [
-        { sectorCode: null, action: PermissionAction.VER },
-        { sectorCode: null, action: PermissionAction.CREAR },
-        { sectorCode: null, action: PermissionAction.EDITAR },
-        { sectorCode: null, action: PermissionAction.FORZAR_CAMBIO },
-      ],
-    );
 
-    const clients = await Promise.all([
-      upsertClient(manager, 'Demo Metalurgica Norte', 'DEMO-CLIENTE-1'),
-      upsertClient(manager, 'Demo Servicios Sur', 'DEMO-CLIENTE-2'),
-    ]);
-    const workshops = await Promise.all([
-      upsertWorkshop(manager, 'Demo Taller Confeccion', [SectorCode.CONFECCION]),
-      upsertWorkshop(manager, 'Demo Ojal y Boton', [SectorCode.OJAL_BOTON]),
-      upsertWorkshop(manager, 'Demo Plancha Externa', [SectorCode.PLANCHA]),
-    ]);
-    const fabrics = await Promise.all([
-      upsertFabric(manager, 'DEMO-TELA-GABARDINA', 'Gabardina azul demo'),
-      upsertFabric(manager, 'DEMO-TELA-RIPSTOP', 'Ripstop gris demo'),
-    ]);
-    const supplies = await Promise.all([
-      upsertSupply(manager, 'DEMO-AVIO-CIERRE', 'Cierre reforzado', SupplyCategory.CONFECCION),
-      upsertSupply(manager, 'DEMO-AVIO-BOTON', 'Boton metalico', SupplyCategory.TERMINACION),
-    ]);
-    const curve = await upsertSizeCurve(manager);
-    const articles = await Promise.all([
-      upsertArticle(manager, 'DEMO-ART-CAMPERA', 'Campera demo', supplies),
-      upsertArticle(manager, 'DEMO-ART-PANTALON', 'Pantalon demo', supplies),
-    ]);
+    const clients = new Map<string, IdRow>();
+    for (const client of demoData.clients) {
+      clients.set(client.taxId, await upsertClient(manager, client.businessName, client.taxId));
+    }
 
-    await ensureOrder(manager, {
-      externalCode: 'DEMO-ORDEN-001',
-      internalCode: 'DEMO-OC-001',
-      clientId: clients[0].id,
-      articleId: articles[0].id,
-      fabricId: fabrics[0].id,
-      sizeCurveId: curve.id,
-      sizeValueId: curve.sizeValueIds[0],
-      quantity: 40,
-      createdById: admin.id,
-      partStatus: PartStatus.EN_PROCESO,
-      stageCode: SectorCode.CORTE,
-      executionType: StageExecutionType.INTERNO,
-    });
-    await ensureOrder(manager, {
-      externalCode: 'DEMO-ORDEN-002',
-      internalCode: 'DEMO-OC-002',
-      clientId: clients[1].id,
-      articleId: articles[0].id,
-      fabricId: fabrics[0].id,
-      sizeCurveId: curve.id,
-      sizeValueId: curve.sizeValueIds[1],
-      quantity: 25,
-      createdById: admin.id,
-      partStatus: PartStatus.EN_PROCESO,
-      stageCode: SectorCode.CONFECCION,
-      executionType: StageExecutionType.EXTERNO,
-      workshopId: workshops[0].id,
-    });
-    await ensureOrder(manager, {
-      externalCode: 'DEMO-ORDEN-003',
-      internalCode: 'DEMO-OC-003',
-      clientId: clients[0].id,
-      articleId: articles[1].id,
-      fabricId: fabrics[1].id,
-      sizeCurveId: curve.id,
-      sizeValueId: curve.sizeValueIds[2],
-      quantity: 18,
-      createdById: admin.id,
-      partStatus: PartStatus.EN_PROCESO,
-      stageCode: SectorCode.PLANCHA,
-      executionType: StageExecutionType.EXTERNO,
-      workshopId: workshops[2].id,
-      estimatedDaysOffset: -1,
-    });
-    await ensureOrder(manager, {
-      externalCode: 'DEMO-ORDEN-004',
-      internalCode: 'DEMO-OC-004',
-      clientId: clients[1].id,
-      articleId: articles[1].id,
-      fabricId: fabrics[1].id,
-      sizeCurveId: curve.id,
-      sizeValueId: curve.sizeValueIds[0],
-      quantity: 12,
-      createdById: admin.id,
-      orderStatus: OrderStatus.EN_ARREGLO,
-      repairNote: 'Demo: revisar costura de muestra.',
-      partStatus: PartStatus.PENDIENTE,
-    });
-    await ensureOrder(manager, {
-      externalCode: 'DEMO-ORDEN-005',
-      internalCode: 'DEMO-OC-005',
-      clientId: clients[0].id,
-      articleId: articles[0].id,
-      fabricId: fabrics[0].id,
-      sizeCurveId: curve.id,
-      sizeValueId: curve.sizeValueIds[1],
-      quantity: 30,
-      createdById: admin.id,
-      orderStatus: OrderStatus.FINALIZADA,
-      partStatus: PartStatus.FINALIZADA,
-      finalized: true,
-    });
+    const workshops = new Map<string, IdRow>();
+    for (const workshop of demoData.workshops) {
+      workshops.set(workshop.name, await upsertWorkshop(manager, workshop.name, workshop.specialties));
+    }
+
+    const fabrics = new Map<string, IdRow>();
+    for (const fabric of demoData.fabrics) {
+      fabrics.set(fabric.code, await upsertFabric(manager, fabric.code, fabric.name));
+    }
+
+    const supplies: IdRow[] = [];
+    for (const supply of demoData.supplies) {
+      supplies.push(await upsertSupply(manager, supply.code, supply.name, supply.category));
+    }
+
+    const curve = await upsertSizeCurve(manager, demoData.sizeCurve);
+    const articles = new Map<string, IdRow>();
+    for (const article of demoData.articles) {
+      articles.set(article.code, await upsertArticle(manager, article.code, article.name, supplies));
+    }
+
+    const admin = usersByEmail.get('admin@demo.proma.local');
+    if (!admin) {
+      throw new Error('Demo data must include admin@demo.proma.local');
+    }
+
+    for (const order of demoData.orders) {
+      await ensureOrder(manager, {
+        externalCode: order.externalCode,
+        internalCode: order.internalCode,
+        clientId: requireDemoId(clients, order.clientTaxId, 'client'),
+        articleId: requireDemoId(articles, order.articleCode, 'article'),
+        fabricId: requireDemoId(fabrics, order.fabricCode, 'fabric'),
+        sizeCurveId: curve.id,
+        sizeValueId: requireSizeValueId(curve.sizeValueIdsByLabel, order.sizeLabel),
+        quantity: order.quantity,
+        createdById: admin.id,
+        orderStatus: order.orderStatus,
+        repairNote: order.repairNote,
+        partStatus: order.partStatus,
+        stageCode: order.stageCode,
+        executionType: order.executionType,
+        workshopId: order.workshopName ? requireDemoId(workshops, order.workshopName, 'workshop') : undefined,
+        estimatedDaysOffset: order.estimatedDaysOffset,
+        finalized: order.finalized,
+      });
+    }
   });
+}
+
+function requireDemoId(values: Map<string, IdRow>, key: string, label: string): string {
+  const row = values.get(key);
+  if (!row) {
+    throw new Error(`Missing demo ${label}: ${key}`);
+  }
+  return row.id;
+}
+
+function requireSizeValueId(values: Map<string, number>, label: string): number {
+  const id = values.get(label);
+  if (!id) {
+    throw new Error(`Missing demo size value: ${label}`);
+  }
+  return id;
 }
 
 async function upsertUser(
@@ -257,17 +258,19 @@ async function upsertSupply(
   return { id: rows[0].id as string };
 }
 
-async function upsertSizeCurve(manager: DataSource['manager']): Promise<{ id: number; sizeValueIds: number[] }> {
-  const existing = await manager.query('SELECT id FROM size_curves WHERE name = $1', ['Demo Alfanumerica']);
+async function upsertSizeCurve(
+  manager: DataSource['manager'],
+  sizeCurve: DemoData['sizeCurve'],
+): Promise<{ id: number; sizeValueIdsByLabel: Map<string, number> }> {
+  const existing = await manager.query('SELECT id FROM size_curves WHERE name = $1', [sizeCurve.name]);
   const curveId = existing.length > 0
     ? (existing[0].id as number)
     : ((await manager.query(
         'INSERT INTO size_curves (name, sequence_type) VALUES ($1, $2) RETURNING id',
-        ['Demo Alfanumerica', SizeSequenceType.ALFABETICA],
+        [sizeCurve.name, sizeCurve.sequenceType],
       ))[0].id as number);
-  const labels = ['S', 'M', 'L'];
-  const ids: number[] = [];
-  for (const [index, label] of labels.entries()) {
+  const ids = new Map<string, number>();
+  for (const [index, label] of sizeCurve.values.entries()) {
     const rows = await manager.query(
       `
         INSERT INTO size_curve_values (size_curve_id, label, sort_order)
@@ -278,9 +281,9 @@ async function upsertSizeCurve(manager: DataSource['manager']): Promise<{ id: nu
       `,
       [curveId, label, index + 1],
     );
-    ids.push(rows[0].id as number);
+    ids.set(label, rows[0].id as number);
   }
-  return { id: curveId, sizeValueIds: ids };
+  return { id: curveId, sizeValueIdsByLabel: ids };
 }
 
 async function upsertArticle(manager: DataSource['manager'], code: string, name: string, supplies: IdRow[]): Promise<IdRow> {

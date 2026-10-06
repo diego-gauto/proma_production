@@ -36,7 +36,10 @@ export type DashboardKanbanPart = PartNode & {
     internalCode?: string;
     externalCode?: string;
     client?: { businessName: string };
-    article?: { name: string };
+    article?: {
+      name: string;
+      decorationParts?: { garmentPart: string; decorationType: string }[];
+    };
     fabric?: { name: string };
   };
 };

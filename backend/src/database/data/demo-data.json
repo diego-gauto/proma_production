@@ -1,0 +1,103 @@
+{
+  "password": "Demo-Proma-123",
+  "users": [
+    { "fullName": "Admin Demo", "email": "admin@demo.proma.local", "role": "ADMIN", "permissions": [] },
+    { "fullName": "Produccion Demo", "email": "produccion@demo.proma.local", "role": "USER", "permissions": [
+      { "sectorCode": null, "action": "VER" },
+      { "sectorCode": null, "action": "CREAR" },
+      { "sectorCode": null, "action": "EDITAR" },
+      { "sectorCode": null, "action": "FORZAR_CAMBIO" }
+    ] }
+  ],
+  "clients": [
+    { "businessName": "Demo Metalurgica Norte", "taxId": "DEMO-CLIENTE-1" },
+    { "businessName": "Demo Servicios Sur", "taxId": "DEMO-CLIENTE-2" }
+  ],
+  "workshops": [
+    { "name": "Demo Taller Confeccion", "specialties": ["CONFECCION"] },
+    { "name": "Demo Ojal y Boton", "specialties": ["OJAL_BOTON"] },
+    { "name": "Demo Plancha Externa", "specialties": ["PLANCHA"] }
+  ],
+  "fabrics": [
+    { "code": "DEMO-TELA-GABARDINA", "name": "Gabardina azul demo" },
+    { "code": "DEMO-TELA-RIPSTOP", "name": "Ripstop gris demo" }
+  ],
+  "supplies": [
+    { "code": "DEMO-AVIO-CIERRE", "name": "Cierre reforzado", "category": "CONFECCION" },
+    { "code": "DEMO-AVIO-BOTON", "name": "Boton metalico", "category": "TERMINACION" }
+  ],
+  "sizeCurve": {
+    "name": "Demo Alfanumerica",
+    "sequenceType": "ALFABETICA",
+    "values": ["S", "M", "L"]
+  },
+  "articles": [
+    { "code": "DEMO-ART-CAMPERA", "name": "Campera demo" },
+    { "code": "DEMO-ART-PANTALON", "name": "Pantalon demo" }
+  ],
+  "orders": [
+    {
+      "externalCode": "DEMO-ORDEN-001",
+      "internalCode": "DEMO-OC-001",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "S",
+      "quantity": 40,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "CORTE",
+      "executionType": "INTERNO"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-002",
+      "internalCode": "DEMO-OC-002",
+      "clientTaxId": "DEMO-CLIENTE-2",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "M",
+      "quantity": 25,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "CONFECCION",
+      "executionType": "EXTERNO",
+      "workshopName": "Demo Taller Confeccion"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-003",
+      "internalCode": "DEMO-OC-003",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-PANTALON",
+      "fabricCode": "DEMO-TELA-RIPSTOP",
+      "sizeLabel": "L",
+      "quantity": 18,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "PLANCHA",
+      "executionType": "EXTERNO",
+      "workshopName": "Demo Plancha Externa",
+      "estimatedDaysOffset": -1
+    },
+    {
+      "externalCode": "DEMO-ORDEN-004",
+      "internalCode": "DEMO-OC-004",
+      "clientTaxId": "DEMO-CLIENTE-2",
+      "articleCode": "DEMO-ART-PANTALON",
+      "fabricCode": "DEMO-TELA-RIPSTOP",
+      "sizeLabel": "S",
+      "quantity": 12,
+      "orderStatus": "EN_ARREGLO",
+      "repairNote": "Demo: revisar costura de muestra.",
+      "partStatus": "PENDIENTE"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-005",
+      "internalCode": "DEMO-OC-005",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "M",
+      "quantity": 30,
+      "orderStatus": "FINALIZADA",
+      "partStatus": "FINALIZADA",
+      "finalized": true
+    }
+  ]
+}

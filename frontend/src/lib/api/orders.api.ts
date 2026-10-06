@@ -8,7 +8,7 @@ export type PartSupply = {
   completeness: string;
   note?: string | null;
   updatedAt?: string | null;
-  supply?: { id: string; name: string; code?: string } | null;
+  supply?: { id: string; name: string; code?: string; category?: string } | null;
 };
 
 export type PartNode = {

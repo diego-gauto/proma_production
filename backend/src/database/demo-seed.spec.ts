@@ -26,14 +26,6 @@ describe('demo seed', () => {
   });
 
   afterAll(async () => {
-    await dataSource?.query("DELETE FROM orders WHERE external_code LIKE 'DEMO-%'");
-    await dataSource?.query("DELETE FROM users WHERE email LIKE '%@demo.proma.local'");
-    await dataSource?.query("DELETE FROM clients WHERE tax_id LIKE 'DEMO-%'");
-    await dataSource?.query("DELETE FROM workshops WHERE name LIKE 'Demo %'");
-    await dataSource?.query("DELETE FROM articles WHERE code LIKE 'DEMO-%'");
-    await dataSource?.query("DELETE FROM supplies WHERE code LIKE 'DEMO-%'");
-    await dataSource?.query("DELETE FROM fabrics WHERE code LIKE 'DEMO-%'");
-    await dataSource?.query("DELETE FROM size_curves WHERE name LIKE 'Demo %'");
     await moduleFixture?.close();
   });
 
