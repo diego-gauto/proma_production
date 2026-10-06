@@ -170,6 +170,24 @@ export function finishStage(
   });
 }
 
+export async function movePartToStage(
+  token: string,
+  partId: string,
+  targetStage: StageOption,
+): Promise<StageEventResponse> {
+  if (targetStage.executionType === "EXTERNO") {
+    throw new Error("Esta etapa requiere seleccionar taller desde el detalle de la orden");
+  }
+  await finishStage(token, partId, {
+    note: "Movimiento desde tablero de sectores",
+  });
+  return startStage(token, partId, {
+    stageId: targetStage.id,
+    executionType: "INTERNO",
+    note: "Movimiento desde tablero de sectores",
+  });
+}
+
 export function updatePartSupply(
   token: string,
   partId: string,

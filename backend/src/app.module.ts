@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { UsersModule } from './modules/users/users.module';
@@ -35,6 +36,7 @@ import { WorkshopsModule } from './modules/workshops/workshops.module';
     ArticlesModule,
     UsersModule,
     OrdersModule,
+    InventoryModule,
     NotificationsModule,
     DashboardModule,
   ],

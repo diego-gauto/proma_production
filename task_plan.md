@@ -1,23 +1,22 @@
-# Etapa 8 - Hardening, Demo y Deploy MVP
+# Plan - Proveedores, stock inicial y ajustes ABM
 
-## Goal
-Implementar Fase 8 del plan: matriz/cobertura de permisos, UX final verificable, seeds demo, hardening de errores/casos edge y preparacion de deploy MVP sin tocar produccion sin backup/confirmacion.
+## Objetivo
+Actualizar modelo y vistas ABM para reflejar que telas y avios son entidades puras, proveedores son entidad propia, y los ingresos de stock vinculan proveedor + material. Para telas, el stock se compone de rollos con codigo y lote.
 
-## Phases
-1. Relevar estado actual de permisos, seeds, errores de negocio, frontend y deploy. Status: complete.
-2. Backend TDD: agregar tests rojos para permisos sensibles, seed demo y edge cases documentados. Status: complete.
-3. Backend implementacion: permisos faltantes, seed demo idempotente y errores de negocio claros. Status: complete.
-4. Frontend UX hardening: formularios/flujos compactos, estados de error/carga y documentar verificacion responsive. Status: complete.
-5. Deploy readiness: Dockerfiles/config/env docs/checklist VPS sin ejecutar produccion sin backup. Status: complete.
-6. Verificacion: build/test/e2e backend y frontend, smoke local y reporte final. Status: complete.
+## Fases
+1. Relevar modelo/API actual y definir cambios minimos compatibles. status: complete
+2. Backend: migracion, entidades, DTOs/servicios/controladores/tests para proveedores e ingresos/rollos. status: complete
+3. Frontend: columnas ABM, nuevo recurso Proveedores, paginacion, perfil/logout y ajustes de header/listados. status: complete
+4. Docs: actualizar PRD y plan de implementacion. status: complete
+5. Verificacion: build/test backend+frontend y smoke local. status: complete
 
-## Decisions
-- Rama de trabajo: `etapa/8-hardening-demo-deploy`, creada desde `develop`.
-- La etapa 8.5 se prepara y documenta; el deploy productivo real requiere backup reciente/verificado y acceso/confirmacion operativa antes de tocar VPS.
-- Mantener TDD para cambios de comportamiento: escribir test, verlo fallar, implementar minimo, verificar verde.
+## Decisiones
+- Sin precio por ahora.
+- Proveedor no va dentro de tela/avio.
+- Tela stock se modela por rollos. Cada rollo guarda codigo y lote por ahora.
+- Avios tendran ingresos con cantidad, sin proveedor embebido en el maestro.
 
-## Errors Encountered
-| Error | Attempt | Resolution |
-|---|---|---|
-| `error building bubblewrap command: mountinfo path is not absolute` | `pwd`, `rg --files`, `git status`, `apply_patch` y otros comandos en sandbox | Reintentar comandos/ediciones necesarios con `require_escalated` y permisos acotados. |
-| `pnpm run test -- --runInBand` pasa `--runInBand` como patron de Jest | Verificacion backend completa | Usar `pnpm --dir backend exec jest --runInBand` y `pnpm --dir backend exec jest --config test/jest-e2e.json --runInBand`. |
+## Errores
+- Test rojo inicial correcto: fabrics aceptaba supplier directo.
+- Backend unitario fallo por seed demo con supplier; corregido.
+- API providers devolvio 500 por TypeORM con leftJoin + skip/take; corregido con findAndCount.

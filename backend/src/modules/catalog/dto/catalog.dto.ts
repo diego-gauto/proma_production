@@ -1,6 +1,7 @@
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -20,10 +21,6 @@ import {
 } from '../entities/catalog.enums';
 
 export class CatalogQueryDto extends PaginationQueryDto {
-  @IsOptional()
-  @IsString()
-  supplier?: string;
-
   @IsOptional()
   @IsEnum(FabricWeaveType)
   weaveType?: FabricWeaveType;
@@ -60,11 +57,6 @@ export class CreateFabricDto {
   @Type(() => Number)
   weightOz?: number;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  supplier?: string;
-
   @IsEnum(FabricWeaveType)
   weaveType!: FabricWeaveType;
 
@@ -94,17 +86,16 @@ export class UpdateFabricDto {
   weightOz?: number;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  supplier?: string;
-
-  @IsOptional()
   @IsEnum(FabricWeaveType)
   weaveType?: FabricWeaveType;
 
   @IsOptional()
   @IsEnum(FabricFormatType)
   formatType?: FabricFormatType;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class CreateSupplyDto {
@@ -124,11 +115,6 @@ export class CreateSupplyDto {
   @IsString()
   @MaxLength(80)
   color?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  supplier?: string;
 
   @IsEnum(SupplyCategory)
   category!: SupplyCategory;
@@ -155,13 +141,12 @@ export class UpdateSupplyDto {
   color?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  supplier?: string;
-
-  @IsOptional()
   @IsEnum(SupplyCategory)
   category?: SupplyCategory;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class SizeCurveValueDto {
@@ -205,4 +190,8 @@ export class UpdateSizeCurveDto {
   @ValidateNested({ each: true })
   @Type(() => SizeCurveValueDto)
   values?: SizeCurveValueDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

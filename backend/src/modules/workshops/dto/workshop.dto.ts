@@ -84,6 +84,11 @@ export class CreateWorkshopDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  specialtyDetail?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()
@@ -126,6 +131,11 @@ export class UpdateWorkshopDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  specialtyDetail?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()
@@ -133,4 +143,8 @@ export class UpdateWorkshopDto {
   @ValidateNested({ each: true })
   @Type(() => WorkshopContactDto)
   contacts?: WorkshopContactDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

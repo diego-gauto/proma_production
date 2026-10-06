@@ -11,6 +11,18 @@ export type ContactMaster = {
   isPrimary?: boolean;
 };
 
+export type ProviderMaster = {
+  id: string;
+  businessName: string;
+  taxId?: string | null;
+  address?: string | null;
+  locality?: string | null;
+  district?: string | null;
+  province?: string | null;
+  contacts?: ContactMaster[];
+  isActive: boolean;
+};
+
 export type ClientMaster = {
   id: string;
   businessName: string;
@@ -31,6 +43,7 @@ export type WorkshopMaster = {
   district?: string | null;
   province?: string | null;
   specialties: string[];
+  specialtyDetail?: string | null;
   contacts?: ContactMaster[];
   isActive: boolean;
 };
@@ -51,7 +64,6 @@ export type FabricMaster = {
   name: string;
   color?: string | null;
   weightOz?: string | null;
-  supplier?: string | null;
   weaveType: "PUNTO" | "PLANO";
   formatType: "ABIERTO" | "TUBULAR";
   isActive: boolean;
@@ -63,7 +75,6 @@ export type SupplyMaster = {
   name: string;
   description?: string | null;
   color?: string | null;
-  supplier?: string | null;
   category: "CONFECCION" | "TERMINACION";
   isActive: boolean;
 };
@@ -90,6 +101,7 @@ export type UserMaster = {
 
 export type MasterName =
   | "clients"
+  | "providers"
   | "workshops"
   | "fabrics"
   | "supplies"
@@ -101,9 +113,14 @@ export function listMasters<T>(
   resource: MasterName,
   token: string,
   search: string,
+  page = 1,
+  limit = 20,
 ): Promise<PaginatedResponse<T>> {
-  const query = search ? `?search=${encodeURIComponent(search)}` : "";
-  return apiRequest<PaginatedResponse<T>>(`/${resource}${query}`, { token });
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (search) {
+    query.set("search", search);
+  }
+  return apiRequest<PaginatedResponse<T>>(`/${resource}?${query.toString()}`, { token });
 }
 
 export function createMaster<T>(

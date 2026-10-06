@@ -1,6 +1,18 @@
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 :root {
-  --background: #11111d;
-  --foreground: #f4f4ff;
+  --background: oklch(15% 0.015 260);
+  --foreground: oklch(94% 0.015 255);
+  --surface: oklch(19% 0.017 260);
+  --surface-raised: oklch(23% 0.023 260);
+  --border: oklch(29% 0.025 260);
+  --muted-foreground: oklch(67% 0.025 255);
+  --primary: oklch(66% 0.22 34);
+  --success: oklch(73% 0.16 160);
+  --warning: oklch(79% 0.15 83);
+  --font-ui: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-display: "Anton", "Arial Narrow", Impact, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
 }
 
 html,
@@ -12,7 +24,7 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: "Segoe UI", Tahoma, Geneva, sans-serif;
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -29,6 +41,6 @@ a {
 }
 
 ::selection {
-  background: #ffe600;
+  background: var(--primary);
   color: #11111d;
 }

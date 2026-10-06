@@ -101,8 +101,8 @@
 - Agregar tablas `client_contacts`, `workshop_contacts`, `article_supplies`, `user_permissions`.
 - Ajustar `clients`: `business_name`, `tax_id`, dirección, localidad, partido, provincia.
 - Ajustar `workshops`: dirección completa y contactos, sin CUIT/CUIL.
-- Ajustar `fabrics`: código/artículo, nombre, color, onzaje, proveedor, tipo `PUNTO/PLANO`, formato `ABIERTO/TUBULAR`.
-- Ajustar `supplies`: código/artículo, nombre, descripción, color, proveedor, categoría `CONFECCION/TERMINACION`.
+- Ajustar `fabrics`: código/artículo, descripción/nombre, color, onzaje, tipo `PUNTO/PLANO`, formato `ABIERTO/TUBULAR`. No incluye proveedor embebido.
+- Ajustar `supplies`: código/artículo, descripción/nombre, color, categoría `CONFECCION/TERMINACION`. No incluye proveedor embebido.
 - Ajustar `size_curves`: soportar `ALFABETICA`, `NUMERICA`, `DOBLE`, `MIXTA`.
 - Ajustar `articles`: código/artículo, nombre, descripción, avíos asociados y partes bordado/estampado. Eliminar asociación conceptual con telas/curvas.
 - Ajustar `users`: roles base + permisos personalizados por sector/acción.
@@ -116,6 +116,7 @@
 - CRUD de clientes con razón social, CUIT/CUIL, dirección, localidad, partido, provincia, notas y `contacts[]`.
 - Cada contacto contiene nombre, email, teléfono fijo, celular 1, celular 2, rol/nota e indicador principal.
 - Listado paginado con búsqueda por razón social, CUIT/CUIL, localidad y contacto.
+- La baja es lógica mediante `deleted_at`; los listados excluyen registros con `deleted_at` y la reactivación limpia esa fecha.
 **Tests**:
 - e2e CRUD completo: crear con 2 contactos, listar con `search`, obtener detalle, editar dirección/contactos, soft-delete.
 - Validar que razón social y CUIT/CUIL son obligatorios.
@@ -134,8 +135,9 @@
 
 ### Etapa 3.3 — Telas (backend)
 **Tareas**:
-- CRUD de telas con código/artículo, nombre, color, onzaje, proveedor, tipo de tejido `PUNTO/PLANO`, formato `ABIERTO/TUBULAR`.
-- Listado paginado con filtros por proveedor, tipo y formato.
+- CRUD de telas con código/artículo, descripción/nombre, color, onzaje, tipo de tejido `PUNTO/PLANO`, formato `ABIERTO/TUBULAR`.
+- Listado paginado con filtros por tipo y formato.
+- No guardar proveedor en la tela; los proveedores se vinculan al ingresar stock.
 **Tests**:
 - e2e CRUD completo.
 - Validar enums de tipo/formato.
@@ -143,8 +145,9 @@
 
 ### Etapa 3.4 — Avíos (backend)
 **Tareas**:
-- CRUD de avíos con código/artículo, nombre, descripción, color, proveedor, categoría `CONFECCION/TERMINACION`.
-- Listado paginado con filtros por categoría y proveedor.
+- CRUD de avíos con código/artículo, descripción/nombre, color, categoría `CONFECCION/TERMINACION`.
+- Listado paginado con filtros por categoría.
+- No guardar proveedor en el avío; los proveedores se vinculan al ingresar stock.
 **Tests**:
 - e2e CRUD completo.
 - Validar categoría obligatoria.
@@ -196,7 +199,21 @@
 - Captura o reporte de verificación para 1366x768: sin runtime errors, sin campos cortados, sin scroll innecesario dentro del formulario principal.
 - `pnpm --dir frontend run build` y `pnpm --dir frontend run test`.
 
-**Cierre de Fase 3**: Admin puede loguearse y gestionar completamente Clientes, Talleres, Telas, Avíos, Curvas, Artículos y Usuarios/Permisos desde el navegador. Los permisos personalizados ya afectan lo que cada usuario puede ver/operar.
+
+### Etapa 3.9 — Proveedores e ingresos básicos de stock
+**Tareas**:
+- CRUD de proveedores con razón social, CUIT/CUIL opcional, dirección completa, notas y contactos.
+- Crear ingresos de tela asociados a proveedor y tela. Cada ingreso contiene fecha, comprobante opcional, nota y uno o más rollos.
+- Cada rollo de tela guarda `code` y `lot`; el stock de tela se calcula como sumatoria de rollos.
+- Crear ingresos de avíos asociados a proveedor y avío, con fecha, comprobante opcional y cantidad.
+- No incluir precio/costo en esta etapa.
+- Frontend: agregar acceso desde Gestión para registrar ingresos de tela por rollos e ingresos de avíos por cantidad, usando Proveedor como dato obligatorio.
+**Tests**:
+- e2e: telas y avíos rechazan `supplier` en payload.
+- e2e: crear proveedor, ingreso de tela con rollos y entrada de avío con cantidad.
+- `migration:run` y `migration:revert` de la migración nueva.
+
+**Cierre de Fase 3**: Admin puede loguearse y gestionar completamente Clientes, Proveedores, Talleres, Telas, Avíos, Curvas, Artículos y Usuarios/Permisos desde el navegador. Las bajas de maestros quedan como desactivaciones lógicas con `deleted_at`, no borrados físicos. Los permisos personalizados ya afectan lo que cada usuario puede ver/operar.
 
 ---
 

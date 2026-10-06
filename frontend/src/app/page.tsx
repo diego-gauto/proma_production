@@ -21,6 +21,7 @@ import {
   createMaster,
   deleteMaster,
   FabricMaster,
+  ProviderMaster,
   listMasters,
   MasterName,
   SizeCurveMaster,
@@ -36,11 +37,16 @@ import {
   NotificationItem,
 } from "../lib/api/notifications.api";
 import {
+  createFabricStockEntry,
+  createSupplyStockEntry,
+} from "../lib/api/inventory.api";
+import {
   createOrder,
   finishStage,
   getOrder,
   listStages,
   markOrderRepair,
+  movePartToStage,
   OrderSummary,
   PartNode,
   recombineParts,
@@ -55,6 +61,7 @@ import styles from "./page.module.css";
 
 type MasterItem =
   | ClientMaster
+  | ProviderMaster
   | WorkshopMaster
   | ArticleMaster
   | FabricMaster
@@ -62,7 +69,7 @@ type MasterItem =
   | SizeCurveMaster
   | UserMaster;
 type FormState = Record<string, string>;
-type MainView = "orders" | "masters";
+type MainView = "orders" | "sectors" | "masters";
 const resources: {
   key: MasterName;
   label: string;
@@ -70,12 +77,13 @@ const resources: {
   empty: string;
 }[] = [
   { key: "clients", label: "Clientes", singular: "Cliente", empty: "Sin clientes cargados" },
-  { key: "workshops", label: "Talleres", singular: "Taller", empty: "Sin talleres cargados" },
+  { key: "providers", label: "Proveedores", singular: "Proveedor", empty: "Sin proveedores cargados" },
+  { key: "workshops", label: "Talleres externos", singular: "Taller", empty: "Sin talleres cargados" },
   { key: "fabrics", label: "Telas", singular: "Tela", empty: "Sin telas cargadas" },
-  { key: "supplies", label: "Avios", singular: "Avio", empty: "Sin avios cargados" },
-  { key: "size-curves", label: "Curvas", singular: "Curva", empty: "Sin curvas cargadas" },
-  { key: "articles", label: "Articulos", singular: "Articulo", empty: "Sin articulos cargados" },
-  { key: "users", label: "Usuarios", singular: "Usuario", empty: "Sin usuarios cargados" },
+  { key: "supplies", label: "Avíos", singular: "Avío", empty: "Sin avíos cargados" },
+  { key: "size-curves", label: "Curvas de talles", singular: "Curva", empty: "Sin curvas cargadas" },
+  { key: "articles", label: "Artículos", singular: "Artículo", empty: "Sin artículos cargados" },
+  { key: "users", label: "Usuarios y permisos", singular: "Usuario", empty: "Sin usuarios cargados" },
 ];
 
 
@@ -84,6 +92,9 @@ export default function Home() {
   const [mainView, setMainView] = useState<MainView>("orders");
   const [active, setActive] = useState<MasterName>("clients");
   const [items, setItems] = useState<MasterItem[]>([]);
+  const [itemsTotal, setItemsTotal] = useState(0);
+  const [itemsPage, setItemsPage] = useState(1);
+  const [itemsLimit] = useState(20);
   const [orders, setOrders] = useState<DashboardRow[]>([]);
   const [kanban, setKanban] = useState<DashboardKanbanResponse>({ stages: [] });
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -91,25 +102,32 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [modalItem, setModalItem] = useState<MasterItem | "new" | null>(null);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [movingPartId, setMovingPartId] = useState<string | null>(null);
 
   const clearStoredSession = useCallback((message?: string) => {
     window.localStorage.removeItem("proma-session");
     setSession(null);
     setItems([]);
+    setItemsTotal(0);
+    setItemsPage(1);
     setOrders([]);
     setKanban({ stages: [] });
     setSummary(null);
     setModalItem(null);
+    setIsStockModalOpen(false);
     setIsOrderModalOpen(false);
     setSelectedOrderId(null);
     setNotifications([]);
     setUnreadCount(0);
     setIsNotificationsOpen(false);
+    setIsProfileOpen(false);
     setError(message ?? "");
   }, []);
 
@@ -131,7 +149,7 @@ export default function Home() {
     [active],
   );
 
-  const loadItems = useCallback(async (nextSearch = search) => {
+  const loadItems = useCallback(async (nextSearch = search, nextPage = itemsPage) => {
     if (!session) {
       return;
     }
@@ -142,8 +160,12 @@ export default function Home() {
         active,
         session.accessToken,
         nextSearch,
+        nextPage,
+        itemsLimit,
       );
       setItems(result.items);
+      setItemsTotal(result.total);
+      setItemsPage(result.page);
     } catch (err) {
       if (isUnauthorizedError(err)) {
         clearStoredSession("La sesion vencio. Ingresá nuevamente.");
@@ -153,7 +175,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [active, clearStoredSession, search, session]);
+  }, [active, clearStoredSession, itemsLimit, itemsPage, search, session]);
 
   useEffect(() => {
     if (session && mainView === "masters") {
@@ -188,7 +210,7 @@ export default function Home() {
   }, [clearStoredSession, search, session]);
 
   useEffect(() => {
-    if (session && mainView === "orders") {
+    if (session && (mainView === "orders" || mainView === "sectors")) {
       void loadOrders();
     }
   }, [loadOrders, mainView, session]);
@@ -249,6 +271,27 @@ export default function Home() {
     }
   }
 
+  async function handleMovePart(partId: string, targetStage: StageOption) {
+    if (!session || movingPartId) {
+      return;
+    }
+    setMovingPartId(partId);
+    setError("");
+    try {
+      await movePartToStage(session.accessToken, partId, targetStage);
+      await loadOrders();
+    } catch (err) {
+      if (isUnauthorizedError(err)) {
+        clearStoredSession("La sesion vencio. Ingresá nuevamente.");
+        return;
+      }
+      setError(err instanceof Error ? err.message : "No se pudo mover la orden de sector");
+      await loadOrders();
+    } finally {
+      setMovingPartId(null);
+    }
+  }
+
   function handleLogout() {
     clearStoredSession();
   }
@@ -275,13 +318,9 @@ export default function Home() {
 
   return (
     <main className={styles.page}>
-      <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <span className={styles.brandMark}>⚡</span>
-          <span>Proma Produccion</span>
-        </div>
+      <header className={styles.topBar}>
         <button
-          className={mainView === "orders" ? styles.navActive : ""}
+          className={styles.brandButton}
           type="button"
           onClick={() => {
             setMainView("orders");
@@ -289,63 +328,183 @@ export default function Home() {
             setError("");
           }}
         >
-          <span>▦</span>
-          Ordenes de corte
+          <span className={styles.brandMark} aria-hidden="true" />
+          <strong>Control de producción</strong>
         </button>
-        {visibleResources.map((resource) => (
+        <nav className={styles.topNav} aria-label="Navegacion principal">
           <button
-            key={resource.key}
-            className={mainView === "masters" && active === resource.key ? styles.navActive : ""}
+            className={mainView === "orders" ? styles.navActive : ""}
             type="button"
             onClick={() => {
-              setMainView("masters");
-              setActive(resource.key);
-              setItems([]);
+              setMainView("orders");
               setSearch("");
               setError("");
-              setModalItem(null);
             }}
           >
-            <span>{resourceIcon(resource.key)}</span>
-            {resource.label}
+            <span className={`${styles.navIcon} ${styles.iconOrders}`} aria-hidden="true" />
+            Órdenes
           </button>
-        ))}
-        <div className={styles.sidebarFooter}>v0.3.0</div>
-      </aside>
+          <button
+            className={mainView === "sectors" ? styles.navActive : ""}
+            type="button"
+            onClick={() => {
+              setMainView("sectors");
+              setSearch("");
+              setError("");
+            }}
+          >
+            <span className={`${styles.navIcon} ${styles.iconSectors}`} aria-hidden="true" />
+            Sectores
+          </button>
+          {visibleResources.length > 0 ? (
+            <button
+              className={mainView === "masters" ? styles.navActive : ""}
+              type="button"
+              onClick={() => {
+                setMainView("masters");
+                setItems([]);
+                setSearch("");
+                setError("");
+                setModalItem(null);
+              }}
+            >
+              <span className={`${styles.navIcon} ${styles.iconManagement}`} aria-hidden="true" />
+              Gestión
+            </button>
+          ) : null}
+          <button className={styles.navMuted} type="button" disabled>
+            <span className={`${styles.navIcon} ${styles.iconReports}`} aria-hidden="true" />
+            Reportes
+          </button>
+        </nav>
+        <div className={styles.topActions}>
+          <form
+            className={styles.topSearch}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (mainView === "orders" || mainView === "sectors") {
+                void loadOrders();
+              } else {
+                void loadItems();
+              }
+            }}
+          >
+            <label>
+              <span>Buscar orden</span>
+              <span className={`${styles.inputIcon} ${styles.iconSearch}`} aria-hidden="true" />
+              <input
+                name="globalSearch"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar orden"
+              />
+            </label>
+          </form>
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadCount}
+            isOpen={isNotificationsOpen}
+            onToggle={() => setIsNotificationsOpen((current) => !current)}
+            onMarkRead={(id) => void handleMarkNotificationRead(id)}
+            onMarkAllRead={() => void handleMarkAllNotificationsRead()}
+          />
+          <Button
+            type="button"
+            onClick={() => {
+              if (mainView === "masters") {
+                setModalItem("new");
+              } else {
+                setIsOrderModalOpen(true);
+              }
+            }}
+          >
+            <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
+            {mainView === "masters" ? `Nuevo ${activeResource.singular}` : "Nueva orden"}
+          </Button>
+          {mainView === "masters" ? (
+            <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
+              Ingreso stock
+            </Button>
+          ) : null}
+          <div className={styles.profileBox}>
+            <button
+              type="button"
+              className={styles.userChip}
+              title={session.user.fullName}
+              onClick={() => setIsProfileOpen((current) => !current)}
+            >
+              {userInitials(session.user.fullName)}
+            </button>
+            {isProfileOpen ? (
+              <div className={styles.profilePanel}>
+                <strong>{session.user.fullName}</strong>
+                <span>{session.user.email}</span>
+                <button type="button" onClick={handleLogout}>
+                  Cerrar sesión
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </header>
 
       <section className={styles.content}>
-        <header className={styles.header}>
+        <header className={styles.heroHeader}>
           <div>
-            <h1>{mainView === "orders" ? "Ordenes de corte" : activeResource.label}</h1>
-            <p>
-              {mainView === "orders"
-                ? "Listado y alta de ordenes de corte."
-                : "Configuracion disponible segun permisos del usuario."}
-            </p>
+            <p className={styles.breadcrumb}>Producción / {mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Vista general"} · {formatTodayLabel()}</p>
+            <h1>{mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Órdenes de corte"}</h1>
           </div>
-          <div className={styles.userBox}>
-            <NotificationBell
-              notifications={notifications}
-              unreadCount={unreadCount}
-              isOpen={isNotificationsOpen}
-              onToggle={() => setIsNotificationsOpen((current) => !current)}
-              onMarkRead={(id) => void handleMarkNotificationRead(id)}
-              onMarkAllRead={() => void handleMarkAllNotificationsRead()}
-            />
-            <span>{session.user.fullName}</span>
-            <small>{session.user.role}</small>
-            <Button type="button" variant="secondary" onClick={handleLogout}>
-              Salir
-            </Button>
-          </div>
+          {mainView === "masters" ? null : (
+            <div className={styles.viewToggle}>
+              <button
+                type="button"
+                className={mainView === "orders" ? styles.toggleActive : ""}
+                onClick={() => setMainView("orders")}
+              >
+                <span className={`${styles.navIcon} ${styles.iconOrders}`} aria-hidden="true" />
+                Lista
+              </button>
+              <button
+                type="button"
+                className={mainView === "sectors" ? styles.toggleActive : ""}
+                onClick={() => setMainView("sectors")}
+              >
+                <span className={`${styles.navIcon} ${styles.iconSectors}`} aria-hidden="true" />
+                Sectores
+              </button>
+            </div>
+          )}
         </header>
+
+        {mainView === "masters" && visibleResources.length > 0 ? (
+          <nav className={styles.managementTabs} aria-label="Gestión de datos maestros">
+            {visibleResources.map((resource) => (
+              <button
+                key={resource.key}
+                type="button"
+                className={resource.key === active ? styles.managementTabActive : ""}
+                onClick={() => {
+                  setActive(resource.key);
+                  setItems([]);
+                  setItemsTotal(0);
+                  setItemsPage(1);
+                  setSearch("");
+                  setError("");
+                  setModalItem(null);
+                }}
+              >
+                {resource.label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
 
         <section className={styles.toolbar}>
           <form
             className={styles.search}
             onSubmit={(event) => {
               event.preventDefault();
-              if (mainView === "orders") {
+              if (mainView === "orders" || mainView === "sectors") {
                 void loadOrders();
               } else {
                 void loadItems();
@@ -365,36 +524,57 @@ export default function Home() {
           <Button
             type="button"
             onClick={() => {
-              if (mainView === "orders") {
-                setIsOrderModalOpen(true);
-              } else {
+              if (mainView === "masters") {
                 setModalItem("new");
+              } else {
+                setIsOrderModalOpen(true);
               }
             }}
           >
-            {mainView === "orders"
-              ? "Nueva orden de corte"
-              : `Nuevo ${activeResource.singular}`}
+            {mainView === "masters" ? `Nuevo ${activeResource.singular}` : "Nueva orden de corte"}
           </Button>
+          {mainView === "masters" ? (
+            <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
+              Nuevo ingreso
+            </Button>
+          ) : null}
         </section>
 
         {error ? <p className={styles.error}>{error}</p> : null}
         {isLoading ? <p className={styles.status}>Cargando datos...</p> : null}
 
-        {mainView === "orders" ? (
-          <OrdersView orders={orders} kanban={kanban} summary={summary} onOpen={setSelectedOrderId} />
-        ) : (
-          <Table
-            columns={buildColumns(
-              active,
-              setModalItem,
-              session.accessToken,
-              loadItems,
-              setError,
-            )}
-            items={items}
-            emptyText={activeResource.empty}
+        {mainView === "orders" || mainView === "sectors" ? (
+          <OrdersView
+            mode={mainView}
+            orders={orders}
+            kanban={kanban}
+            summary={summary}
+            onOpen={setSelectedOrderId}
+            onMove={(partId, stage) => void handleMovePart(partId, stage)}
+            movingPartId={movingPartId}
           />
+        ) : (
+          <section className={styles.managementPanel}>
+            <header className={styles.sectionTitleRow}>
+              <div>
+                <p className={styles.catalogEyebrow}>Catálogo</p>
+                <h2>{activeResource.label}</h2>
+                <p>{itemsTotal} registros en esta vista</p>
+              </div>
+            </header>
+            <Table
+              columns={buildColumns(active)}
+              items={items}
+              emptyText={activeResource.empty}
+              onRowClick={setModalItem}
+            />
+            <Pagination
+              page={itemsPage}
+              limit={itemsLimit}
+              total={itemsTotal}
+              onPageChange={(nextPage) => void loadItems(search, nextPage)}
+            />
+          </section>
         )}
       </section>
 
@@ -430,132 +610,302 @@ export default function Home() {
           }}
         />
       ) : null}
+
+      {isStockModalOpen ? (
+        <StockEntryModal
+          token={session.accessToken}
+          onClose={() => setIsStockModalOpen(false)}
+          onSaved={() => {
+            setIsStockModalOpen(false);
+            setError("");
+          }}
+        />
+      ) : null}
     </main>
   );
 }
 
-function resourceIcon(resource: MasterName): string {
-  const icons: Record<MasterName, string> = {
-    clients: "▣",
-    workshops: "▤",
-    fabrics: "▥",
-    supplies: "▧",
-    "size-curves": "▨",
-    articles: "▩",
-    users: "●●",
-  };
-  return icons[resource];
-}
-
 function OrdersView({
+  mode,
   orders,
   kanban,
   summary,
   onOpen,
+  onMove,
+  movingPartId,
 }: {
+  mode: "orders" | "sectors";
   orders: DashboardRow[];
   kanban: DashboardKanbanResponse;
   summary: DashboardSummary | null;
   onOpen: (orderId: string) => void;
+  onMove: (partId: string, stage: StageOption) => void;
+  movingPartId: string | null;
 }) {
   return (
     <div className={styles.dashboardStack}>
       <section className={styles.summaryGrid}>
-        <SummaryTile label="Activas" value={summary?.activeOrders ?? 0} />
-        <SummaryTile label="Arreglo" value={summary?.inRepair ?? 0} />
-        <SummaryTile label="Demoradas" value={summary?.bottlenecks ?? 0} />
-        <SummaryTile label="Vencidas" value={summary?.overdue ?? 0} />
-        <SummaryTile label="Finalizadas" value={summary?.finalized ?? 0} />
+        <SummaryTile label="Órdenes activas" value={summary?.activeOrders ?? 0} />
+        <SummaryTile label="En riesgo" value={summary?.bottlenecks ?? 0} tone="warning" />
+        <SummaryTile label="A tiempo" value={onTimeOrders(summary)} tone="success" />
+        <SummaryTile label="Atrasadas" value={summary?.overdue ?? 0} tone="danger" />
       </section>
 
-      <div className={styles.ordersTableWrap}>
-        <table className={styles.ordersTable}>
-          <colgroup>
-            <col className={styles.colOrderCode} />
-            <col className={styles.colClient} />
-            <col className={styles.colProduct} />
-            <col className={styles.colQuantity} />
-            <col className={styles.colStage} />
-            <col className={styles.colDate} />
-            <col className={styles.colDays} />
-            <col className={styles.colLocation} />
-            <col className={styles.colStatus} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>OC</th>
-              <th>Cliente</th>
-              <th>Producto</th>
-              <th>Cant.</th>
-              <th>Sector</th>
-              <th>Ingreso</th>
-              <th>Dias</th>
-              <th>Ubicacion</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.length === 0 ? (
-              <tr>
-                <td colSpan={9} className={styles.emptyState}>
-                  No hay ordenes de corte para mostrar
-                </td>
-              </tr>
-            ) : (
-              orders.map((row) => (
-                <tr key={row.partId} className={rowClassName(row.rowType)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
-                  <td>
-                    <span className={styles.orderCode}>{rowCode(row)}</span>
-                  </td>
-                  <td>{row.clientName}</td>
-                  <td>{row.articleName}</td>
-                  <td>{row.quantity}</td>
-                  <td>{row.stage?.name ?? row.statusLabel}</td>
-                  <td>{row.startedAt ? formatDate(row.startedAt) : "Pendiente"}</td>
-                  <td>{row.daysInStage ?? "-"}</td>
-                  <td>{row.location}</td>
-                  <td>
-                    <span className={`${styles.statusPill} ${styles[`status${semaphoreTone(row.semaphore)}`]}`}>
-                      {row.statusLabel}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <section className={styles.kanbanBoard}>
-        {kanban.stages.map((column) => (
-          <div className={styles.kanbanColumn} key={column.stage.id}>
-            <header>
-              <strong>{column.stage.name}</strong>
-              <span>{column.parts.length}</span>
-            </header>
-            <div className={styles.kanbanCards}>
-              {column.parts.length === 0 ? <p>Sin partes</p> : null}
-              {column.parts.map((part) => (
-                <button type="button" key={part.id} onClick={() => onOpen(part.order?.id ?? "")}>
-                  <strong>{part.partCode}</strong>
-                  <span>{part.quantity} prendas</span>
-                </button>
-              ))}
-            </div>
+      <section className={styles.productionPanel}>
+        <header className={styles.sectionTitleRow}>
+          <div>
+            <h2>{mode === "orders" ? "Listado de órdenes" : "Órdenes por sector"}</h2>
+            <p>{mode === "orders" ? `${orders.length} órdenes visibles · prioridades del día` : `${kanban.stages.length} sectores operativos`}</p>
           </div>
-        ))}
+        </header>
+
+        {mode === "orders" ? (
+          <div className={styles.ordersTableWrap}>
+            <table className={styles.ordersTable}>
+              <colgroup>
+                <col className={styles.colOrderCode} />
+                <col className={styles.colCreated} />
+                <col className={styles.colAge} />
+                <col className={styles.colQuantity} />
+                <col className={styles.colFabric} />
+                <col className={styles.colStage} />
+                <col className={styles.colEstimated} />
+                <col className={styles.colProgress} />
+                <col className={styles.colStatus} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Orden / Cliente / Producto</th>
+                  <th>Alta</th>
+                  <th>Tiempo</th>
+                  <th>Cantidad</th>
+                  <th>Tela</th>
+                  <th>Etapa actual</th>
+                  <th>Estimado</th>
+                  <th>Progreso</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className={styles.emptyState}>
+                      No hay ordenes de corte para mostrar
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map((row) => (
+                    <tr key={row.partId} className={rowClassName(row.rowType)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
+                      <td>
+                        <span className={styles.orderCode}>{rowCode(row)}</span>
+                        <span className={styles.orderMeta}>{row.clientName}</span>
+                        <span className={styles.orderProduct}>{row.articleName}</span>
+                      </td>
+                      <td>{formatDate(row.createdAt)}</td>
+                      <td>{daysSince(row.createdAt)} d</td>
+                      <td>{row.quantity} u</td>
+                      <td>{row.fabricName}</td>
+                      <td>{row.stage?.name ?? row.statusLabel}</td>
+                      <td>{row.estimatedFinishAt ? formatDate(row.estimatedFinishAt) : "Sin fecha"}</td>
+                      <td>
+                        <ProgressMeter value={progressFor(row)} />
+                      </td>
+                      <td>
+                        <span className={`${styles.statusPill} ${styles[`status${semaphoreTone(row.semaphore)}`]}`}>
+                          {statusText(row)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <section className={styles.kanbanBoard}>
+            {kanban.stages.map((column) => (
+              <div
+                className={styles.kanbanColumn}
+                key={column.stage.id}
+                data-stage-id={column.stage.id}
+                data-stage-name={column.stage.name}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const partId = event.dataTransfer.getData("text/plain");
+                  const currentStageId = Number(event.dataTransfer.getData("application/x-proma-stage"));
+                  if (partId && currentStageId !== column.stage.id) {
+                    onMove(partId, column.stage);
+                  }
+                }}
+              >
+                <header>
+                  <strong>{column.stage.name}</strong>
+                  <span>{column.parts.length}</span>
+                </header>
+                <div className={styles.kanbanCards}>
+                  {column.parts.length === 0 ? <p>Sin ordenes</p> : null}
+                  {column.parts.map((part) => (
+                    <button
+                      type="button"
+                      key={part.id}
+                      data-part-id={part.id}
+                      className={part.id === movingPartId ? styles.kanbanCardMoving : ""}
+                      draggable={part.id !== movingPartId}
+                      disabled={part.id === movingPartId}
+                      onClick={() => part.order?.id && onOpen(part.order.id)}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", part.id);
+                        event.dataTransfer.setData("application/x-proma-stage", String(column.stage.id));
+                      }}
+                      onDragEnd={(event) => {
+                        event.dataTransfer.clearData();
+                      }}
+                    >
+                      <strong>{part.order?.externalCode ?? part.order?.internalCode ?? part.partCode}</strong>
+                      <span>{part.order?.article?.name ?? part.partCode}</span>
+                      <small>{part.id === movingPartId ? "Moviendo..." : `${part.order?.client?.businessName ?? "Cliente"} - ${part.quantity} u`}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
       </section>
     </div>
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: number }) {
+
+function Pagination({
+  page,
+  limit,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  limit: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(page));
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  useEffect(() => {
+    setDraft(String(page));
+  }, [page]);
+
+  function go(nextPage: number) {
+    onPageChange(Math.min(totalPages, Math.max(1, nextPage)));
+  }
+
   return (
-    <div className={styles.summaryTile}>
+    <nav className={styles.pagination} aria-label="Paginación">
+      <button type="button" onClick={() => go(1)} disabled={page <= 1} aria-label="Primera página">
+        «
+      </button>
+      <button type="button" onClick={() => go(page - 1)} disabled={page <= 1} aria-label="Página anterior">
+        ‹
+      </button>
+      <div className={styles.paginationControl}>
+        <span>Página</span>
+        <input
+          value={draft}
+          inputMode="numeric"
+          onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              go(Number(draft || page));
+            }
+          }}
+        />
+        <span>de {totalPages}</span>
+        <button type="button" onClick={() => go(Number(draft || page))} disabled={Number(draft || page) === page}>
+          Ir
+        </button>
+      </div>
+      <button type="button" onClick={() => go(page + 1)} disabled={page >= totalPages} aria-label="Página siguiente">
+        ›
+      </button>
+      <button type="button" onClick={() => go(totalPages)} disabled={page >= totalPages} aria-label="Última página">
+        »
+      </button>
+    </nav>
+  );
+}
+
+
+function formatTwoDigits(value: number): string {
+  return value < 10 ? `0${value}` : String(value);
+}
+
+function onTimeOrders(summary: DashboardSummary | null): number {
+  if (!summary) return 0;
+  return Math.max(0, summary.activeOrders - summary.bottlenecks - summary.overdue - summary.inRepair);
+}
+
+function SummaryTile({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "warning" | "success" | "danger" }) {
+  return (
+    <div className={`${styles.summaryTile} ${styles[`summary${tone}`]}`}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong>{formatTwoDigits(value)}</strong>
     </div>
   );
+}
+
+function ProgressMeter({ value }: { value: number }) {
+  return (
+    <span className={styles.progressMeter} aria-label={`Avance ${value}%`}>
+      <span className={styles.progressTrack}>
+        <span style={{ width: `${value}%` }} />
+      </span>
+      <small>{value}%</small>
+    </span>
+  );
+}
+
+const stageProgress: Record<string, number> = {
+  CORTE: 12,
+  BORDADO: 34,
+  ESTAMPADO: 42,
+  AVIOS_CONFECCION: 50,
+  CONFECCION: 66,
+  ATRAQUE: 74,
+  OJAL_BOTON: 82,
+  AVIOS_TERMINACION: 88,
+  PLANCHA: 94,
+  TERMINACION: 100,
+};
+
+function progressFor(row: DashboardRow): number {
+  if (row.semaphore === "FINALIZED" || row.partStatus === "FINALIZADA") {
+    return 100;
+  }
+  const stageCode = row.stage?.code;
+  if (stageCode && stageCode in stageProgress) {
+    return stageProgress[stageCode];
+  }
+  return 8;
+}
+
+function statusText(row: DashboardRow): string {
+  if (row.semaphore === "OVERDUE") return "Atrasada";
+  if (row.semaphore === "WARNING") return "En riesgo";
+  if (row.semaphore === "FINALIZED") return "Finalizada";
+  if (row.orderStatus === "EN_ARREGLO") return "Arreglo";
+  return "A tiempo";
+}
+
+function userInitials(value: string): string {
+  return value
+    .split(" ")
+    .map((part) => part.trim()[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "U";
 }
 
 function rowCode(row: DashboardRow): string {
@@ -573,6 +923,26 @@ function semaphoreTone(value: DashboardRow["semaphore"]): "Red" | "Yellow" | "Gr
 
 function partIsHistorical(status: string): boolean {
   return status === "DIVIDIDA" || status === "REINTEGRADA";
+}
+
+function daysSince(value: string): number {
+  const created = new Date(value).getTime();
+  if (Number.isNaN(created)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000)));
+}
+
+
+function formatTodayLabel(): string {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })
+    .format(new Date())
+    .replace(".", "")
+    .toUpperCase();
 }
 
 function formatDate(value: string): string {
@@ -1099,108 +1469,237 @@ function buildPartForest(parts: PartNode[]): PartNode[] {
   return roots;
 }
 
-function buildColumns(
-  resource: MasterName,
-  edit: (item: MasterItem) => void,
-  token: string,
-  reload: () => Promise<void>,
-  setError: (message: string) => void,
-) {
-  const actions = {
-    key: "actions",
+function buildColumns(resource: MasterName) {
+  const chevron = {
+    key: "open",
     label: "",
-    render: (item: MasterItem) => (
-      <div className={styles.rowActions}>
-        <Button type="button" variant="secondary" onClick={() => edit(item)}>
-          Editar
-        </Button>
-        <Button
-          type="button"
-          variant="danger"
-          onClick={async () => {
-            setError("");
-            try {
-              await deleteMaster(resource, token, item.id);
-              await reload();
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "No se pudo dar de baja");
-            }
-          }}
-        >
-          Baja
-        </Button>
-      </div>
-    ),
+    render: () => <span className={styles.rowChevron} aria-hidden="true">›</span>,
   };
 
   if (resource === "users") {
     return [
       { key: "name", label: "Nombre", render: (item: MasterItem) => (item as UserMaster).fullName },
+      { key: "sector", label: "Sector", render: (item: MasterItem) => formatUserSector(item as UserMaster) },
       { key: "email", label: "Email", render: (item: MasterItem) => (item as UserMaster).email },
-      { key: "role", label: "Rol", render: (item: MasterItem) => (item as UserMaster).role },
-      { key: "permissions", label: "Permisos", render: (item: MasterItem) => formatPermissions((item as UserMaster).permissions) },
-      actions,
+      { key: "status", label: "Estado", render: (item: MasterItem) => statusBadge((item as UserMaster).isActive) },
+      chevron,
+    ];
+  }
+
+  if (resource === "providers") {
+    return [
+      { key: "businessName", label: "Proveedor", render: (item: MasterItem) => (item as ProviderMaster).businessName },
+      { key: "tax", label: "CUIT/CUIL", render: (item: MasterItem) => (item as ProviderMaster).taxId ?? "Sin dato" },
+      { key: "address", label: "Dirección", render: (item: MasterItem) => formatFullAddress(item as ProviderMaster) },
+      { key: "contacts", label: "Contacto", render: (item: MasterItem) => formatContacts((item as ProviderMaster).contacts) },
+      { key: "status", label: "Estado", render: (item: MasterItem) => statusBadge((item as ProviderMaster).isActive) },
+      chevron,
     ];
   }
 
   if (resource === "fabrics") {
     return [
-      { key: "code", label: "Articulo", render: (item: MasterItem) => (item as FabricMaster).code },
-      { key: "name", label: "Nombre", render: (item: MasterItem) => (item as FabricMaster).name },
+      { key: "description", label: "Descripción", render: (item: MasterItem) => (item as FabricMaster).name },
       { key: "color", label: "Color", render: (item: MasterItem) => (item as FabricMaster).color ?? "Sin color" },
-      { key: "weight", label: "Onz.", render: (item: MasterItem) => (item as FabricMaster).weightOz ?? "Sin dato" },
-      { key: "type", label: "Tipo", render: (item: MasterItem) => `${(item as FabricMaster).weaveType}/${(item as FabricMaster).formatType}` },
-      actions,
+      { key: "weight", label: "Onzaje", render: (item: MasterItem) => (item as FabricMaster).weightOz ?? "Sin dato" },
+      { key: "type", label: "Tipo", render: (item: MasterItem) => (item as FabricMaster).weaveType },
+      { key: "format", label: "Formato", render: (item: MasterItem) => (item as FabricMaster).formatType },
+      chevron,
     ];
   }
 
   if (resource === "supplies") {
     return [
-      { key: "code", label: "Articulo", render: (item: MasterItem) => (item as SupplyMaster).code },
-      { key: "name", label: "Nombre", render: (item: MasterItem) => (item as SupplyMaster).name },
+      { key: "code", label: "Código", render: (item: MasterItem) => (item as SupplyMaster).code },
+      { key: "description", label: "Descripción", render: (item: MasterItem) => (item as SupplyMaster).description || (item as SupplyMaster).name },
+      { key: "category", label: "Categoría", render: (item: MasterItem) => (item as SupplyMaster).category },
       { key: "color", label: "Color", render: (item: MasterItem) => (item as SupplyMaster).color ?? "Sin color" },
-      { key: "supplier", label: "Proveedor", render: (item: MasterItem) => (item as SupplyMaster).supplier ?? "Sin proveedor" },
-      { key: "category", label: "Categoria", render: (item: MasterItem) => (item as SupplyMaster).category },
-      actions,
+      chevron,
     ];
   }
 
   if (resource === "size-curves") {
     return [
-      { key: "name", label: "Nombre", render: (item: MasterItem) => (item as SizeCurveMaster).name },
+      { key: "name", label: "Curva", render: (item: MasterItem) => (item as SizeCurveMaster).name },
       { key: "type", label: "Tipo", render: (item: MasterItem) => (item as SizeCurveMaster).sequenceType },
-      { key: "values", label: "Talles", render: (item: MasterItem) => formatList((item as SizeCurveMaster).values, (value) => value.label) },
-      actions,
+      { key: "values", label: "Curva entera", render: (item: MasterItem) => formatList((item as SizeCurveMaster).values, (value) => value.label) },
+      chevron,
     ];
   }
 
   if (resource === "workshops") {
     return [
       { key: "name", label: "Taller", render: (item: MasterItem) => (item as WorkshopMaster).name },
-      { key: "location", label: "Localidad", render: (item: MasterItem) => formatAddress(item as WorkshopMaster) },
-      { key: "specialties", label: "Especialidades", render: (item: MasterItem) => formatList((item as WorkshopMaster).specialties) },
-      { key: "contacts", label: "Contactos", render: (item: MasterItem) => formatContacts((item as WorkshopMaster).contacts) },
-      actions,
+      { key: "type", label: "Tipo", render: (item: MasterItem) => formatList((item as WorkshopMaster).specialties) },
+      { key: "specialty", label: "Especialidad", render: (item: MasterItem) => (item as WorkshopMaster).specialtyDetail ?? "Sin especificar" },
+      { key: "address", label: "Dirección", render: (item: MasterItem) => formatFullAddress(item as WorkshopMaster) },
+      { key: "contacts", label: "Contacto", render: (item: MasterItem) => formatContacts((item as WorkshopMaster).contacts) },
+      chevron,
     ];
   }
 
   if (resource === "articles") {
     return [
-      { key: "code", label: "Articulo", render: (item: MasterItem) => (item as ArticleMaster).code },
-      { key: "name", label: "Producto", render: (item: MasterItem) => (item as ArticleMaster).name },
-      { key: "supplies", label: "Avios", render: (item: MasterItem) => formatList((item as ArticleMaster).supplies, (supply) => supply.supply?.name ?? supply.id, "Sin avios") },
-      { key: "decorations", label: "Partes", render: (item: MasterItem) => formatList((item as ArticleMaster).decorationParts, (part) => `${part.garmentPart}: ${part.decorationType}`, "Sin partes") },
-      actions,
+      { key: "code", label: "Código", render: (item: MasterItem) => (item as ArticleMaster).code },
+      { key: "description", label: "Descripción", render: (item: MasterItem) => (item as ArticleMaster).description || (item as ArticleMaster).name },
+      chevron,
     ];
   }
 
   return [
-    { key: "businessName", label: "Razon social", render: (item: MasterItem) => (item as ClientMaster).businessName },
+    { key: "businessName", label: "Cliente", render: (item: MasterItem) => (item as ClientMaster).businessName },
     { key: "tax", label: "CUIT/CUIL", render: (item: MasterItem) => (item as ClientMaster).taxId },
-    { key: "location", label: "Localidad", render: (item: MasterItem) => formatAddress(item as ClientMaster) },
-    { key: "contacts", label: "Contactos", render: (item: MasterItem) => formatContacts((item as ClientMaster).contacts) },
-    actions,
+    { key: "address", label: "Dirección", render: (item: MasterItem) => formatFullAddress(item as ClientMaster) },
+    { key: "contacts", label: "Contacto", render: (item: MasterItem) => formatContacts((item as ClientMaster).contacts) },
+    chevron,
   ];
+}
+
+
+function StockEntryModal({
+  token,
+  onClose,
+  onSaved,
+}: {
+  token: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [providers, setProviders] = useState<ProviderMaster[]>([]);
+  const [fabrics, setFabrics] = useState<FabricMaster[]>([]);
+  const [supplies, setSupplies] = useState<SupplyMaster[]>([]);
+  const [kind, setKind] = useState<"fabric" | "supply">("fabric");
+  const [form, setForm] = useState<FormState>({
+    providerId: "",
+    fabricId: "",
+    supplyId: "",
+    entryDate: todayInputDate(),
+    documentNumber: "",
+    quantity: "",
+    rolls: "",
+    note: "",
+  });
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadOptions() {
+      const [providerResult, fabricResult, supplyResult] = await Promise.all([
+        listMasters<ProviderMaster>("providers", token, "", 1, 100),
+        listMasters<FabricMaster>("fabrics", token, "", 1, 100),
+        listMasters<SupplyMaster>("supplies", token, "", 1, 100),
+      ]);
+      setProviders(providerResult.items);
+      setFabrics(fabricResult.items);
+      setSupplies(supplyResult.items);
+      setForm((current) => ({
+        ...current,
+        providerId: current.providerId || providerResult.items[0]?.id || "",
+        fabricId: current.fabricId || fabricResult.items[0]?.id || "",
+        supplyId: current.supplyId || supplyResult.items[0]?.id || "",
+      }));
+    }
+
+    void loadOptions().catch((err) => {
+      setError(err instanceof Error ? err.message : "No se pudieron cargar opciones de stock");
+    });
+  }, [token]);
+
+  function setValue(name: string, value: string) {
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    try {
+      if (!form.providerId) {
+        setError("Seleccioná un proveedor.");
+        return;
+      }
+      if (kind === "fabric") {
+        const rolls = parseRolls(form.rolls);
+        if (!form.fabricId || rolls.length === 0) {
+          setError("Seleccioná una tela y cargá al menos un rollo con código y lote.");
+          return;
+        }
+        await createFabricStockEntry(token, {
+          providerId: form.providerId,
+          fabricId: form.fabricId,
+          entryDate: new Date(`${form.entryDate}T00:00:00`).toISOString(),
+          documentNumber: form.documentNumber || undefined,
+          note: form.note || undefined,
+          rolls,
+        });
+      } else {
+        const quantity = Number(form.quantity);
+        if (!form.supplyId || !Number.isFinite(quantity) || quantity <= 0) {
+          setError("Seleccioná un avío y cargá una cantidad mayor a cero.");
+          return;
+        }
+        await createSupplyStockEntry(token, {
+          providerId: form.providerId,
+          supplyId: form.supplyId,
+          entryDate: new Date(`${form.entryDate}T00:00:00`).toISOString(),
+          documentNumber: form.documentNumber || undefined,
+          note: form.note || undefined,
+          quantity,
+        });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo registrar el ingreso");
+    }
+  }
+
+  const missingOptions = providers.length === 0 || (kind === "fabric" ? fabrics.length === 0 : supplies.length === 0);
+
+  return (
+    <Modal title="Nuevo ingreso de stock" onClose={onClose}>
+      <form className={styles.modalForm} onSubmit={handleSubmit}>
+        <div className={styles.stockTypeSwitch} role="group" aria-label="Tipo de ingreso">
+          <button type="button" className={kind === "fabric" ? styles.stockTypeActive : ""} onClick={() => setKind("fabric")}>
+            Tela por rollos
+          </button>
+          <button type="button" className={kind === "supply" ? styles.stockTypeActive : ""} onClick={() => setKind("supply")}>
+            Avíos por cantidad
+          </button>
+        </div>
+        <div className={styles.compactGrid}>
+          <Select label="Proveedor" value={form.providerId} onChange={(event) => setValue("providerId", event.target.value)} options={providers.map((provider) => ({ label: provider.businessName, value: provider.id }))} />
+          <Input label="Fecha" type="date" value={form.entryDate} onChange={(event) => setValue("entryDate", event.target.value)} required />
+          <Input label="Comprobante" value={form.documentNumber} onChange={(event) => setValue("documentNumber", event.target.value)} />
+          {kind === "fabric" ? (
+            <Select label="Tela" value={form.fabricId} onChange={(event) => setValue("fabricId", event.target.value)} options={fabrics.map((fabric) => ({ label: `${fabric.code} - ${fabric.name}${fabric.color ? ` / ${fabric.color}` : ""}`, value: fabric.id }))} />
+          ) : (
+            <Select label="Avío" value={form.supplyId} onChange={(event) => setValue("supplyId", event.target.value)} options={supplies.map((supply) => ({ label: `${supply.code} - ${supply.name}`, value: supply.id }))} />
+          )}
+          {kind === "supply" ? (
+            <Input label="Cantidad" type="number" min="0.01" step="0.01" value={form.quantity} onChange={(event) => setValue("quantity", event.target.value)} required />
+          ) : null}
+        </div>
+        {kind === "fabric" ? (
+          <label className={styles.textAreaLabel}>
+            Rollos: código|lote
+            <textarea value={form.rolls} onChange={(event) => setValue("rolls", event.target.value)} placeholder={"R001|Lote A\nR002|Lote A"} required />
+          </label>
+        ) : null}
+        <label className={styles.textAreaLabel}>
+          Nota
+          <textarea value={form.note} onChange={(event) => setValue("note", event.target.value)} />
+        </label>
+        {missingOptions ? (
+          <p className={styles.error}>
+            Para cargar ingresos debe existir al menos un proveedor y {kind === "fabric" ? "una tela" : "un avío"}.
+          </p>
+        ) : null}
+        {error ? <p className={styles.error}>{error}</p> : null}
+        <div className={styles.formActions}>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" disabled={missingOptions}>Registrar ingreso</Button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function MasterModal({
@@ -1236,6 +1735,17 @@ function MasterModal({
     }
   }
 
+  async function handleDeactivate() {
+    if (!item) return;
+    setError("");
+    try {
+      await deleteMaster(resource, token, item.id);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo desactivar");
+    }
+  }
+
   function setValue(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
   }
@@ -1246,6 +1756,11 @@ function MasterModal({
         <MasterFields resource={resource} form={form} setValue={setValue} isEditing={isEditing} />
         {error ? <p className={styles.error}>{error}</p> : null}
         <div className={styles.formActions}>
+          {item ? (
+            <Button type="button" variant="danger" onClick={() => void handleDeactivate()}>
+              Desactivar
+            </Button>
+          ) : null}
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
@@ -1267,6 +1782,20 @@ function MasterFields({
   setValue: (name: string, value: string) => void;
   isEditing: boolean;
 }) {
+  if (resource === "providers") {
+    return (
+      <div className={styles.compactGrid}>
+        <Input label="Proveedor" value={form.businessName} onChange={(event) => setValue("businessName", event.target.value)} required />
+        <Input label="CUIT/CUIL" value={form.taxId} onChange={(event) => setValue("taxId", event.target.value)} />
+        <Input label="Dirección" value={form.address} onChange={(event) => setValue("address", event.target.value)} />
+        <Input label="Localidad" value={form.locality} onChange={(event) => setValue("locality", event.target.value)} />
+        <Input label="Partido" value={form.district} onChange={(event) => setValue("district", event.target.value)} />
+        <Input label="Provincia" value={form.province} onChange={(event) => setValue("province", event.target.value)} />
+        <Input label="Contactos" value={form.contacts} onChange={(event) => setValue("contacts", event.target.value)} placeholder="Nombre|email|fijo|cel1|cel2; Otro|email" />
+      </div>
+    );
+  }
+
   if (resource === "users") {
     return (
       <div className={styles.compactGrid}>
@@ -1287,7 +1816,8 @@ function MasterFields({
         <Input label="Localidad" value={form.locality} onChange={(event) => setValue("locality", event.target.value)} />
         <Input label="Partido" value={form.district} onChange={(event) => setValue("district", event.target.value)} />
         <Input label="Provincia" value={form.province} onChange={(event) => setValue("province", event.target.value)} />
-        <Input label="Especialidades" value={form.specialties} onChange={(event) => setValue("specialties", event.target.value)} placeholder="CONFECCION, PLANCHA" />
+        <Input label="Tipo de taller" value={form.specialties} onChange={(event) => setValue("specialties", event.target.value)} placeholder="CONFECCION, PLANCHA" />
+        <Input label="Especialidad" value={form.specialtyDetail} onChange={(event) => setValue("specialtyDetail", event.target.value)} placeholder="Pantalones, remeras, camperas" />
         <Input label="Contactos" value={form.contacts} onChange={(event) => setValue("contacts", event.target.value)} placeholder="Nombre|email|fijo|cel1|cel2; Otro|email" />
       </div>
     );
@@ -1300,7 +1830,6 @@ function MasterFields({
         <Input label="Nombre" value={form.name} onChange={(event) => setValue("name", event.target.value)} required />
         <Input label="Color" value={form.color} onChange={(event) => setValue("color", event.target.value)} />
         <Input label="Onzaje" type="number" step="0.01" value={form.weightOz} onChange={(event) => setValue("weightOz", event.target.value)} />
-        <Input label="Proveedor" value={form.supplier} onChange={(event) => setValue("supplier", event.target.value)} />
         <Select label="Tipo" value={form.weaveType} onChange={(event) => setValue("weaveType", event.target.value)} options={[{ label: "Punto", value: "PUNTO" }, { label: "Plano", value: "PLANO" }]} />
         <Select label="Formato" value={form.formatType} onChange={(event) => setValue("formatType", event.target.value)} options={[{ label: "Abierto", value: "ABIERTO" }, { label: "Tubular", value: "TUBULAR" }]} />
       </div>
@@ -1314,7 +1843,6 @@ function MasterFields({
         <Input label="Nombre" value={form.name} onChange={(event) => setValue("name", event.target.value)} required />
         <Input label="Descripcion" value={form.description} onChange={(event) => setValue("description", event.target.value)} />
         <Input label="Color" value={form.color} onChange={(event) => setValue("color", event.target.value)} />
-        <Input label="Proveedor" value={form.supplier} onChange={(event) => setValue("supplier", event.target.value)} />
         <Select label="Categoria" value={form.category} onChange={(event) => setValue("category", event.target.value)} options={[{ label: "Confeccion", value: "CONFECCION" }, { label: "Terminacion", value: "TERMINACION" }]} />
       </div>
     );
@@ -1356,6 +1884,18 @@ function MasterFields({
 }
 
 function initialForm(resource: MasterName, item: MasterItem | null): FormState {
+  if (resource === "providers") {
+    const provider = item as ProviderMaster | null;
+    return {
+      businessName: provider?.businessName ?? "",
+      taxId: provider?.taxId ?? "",
+      address: provider?.address ?? "",
+      locality: provider?.locality ?? "",
+      district: provider?.district ?? "",
+      province: provider?.province ?? "",
+      contacts: formatContactsInput(provider?.contacts),
+    };
+  }
   if (resource === "users") {
     const user = item as UserMaster | null;
     return {
@@ -1375,6 +1915,7 @@ function initialForm(resource: MasterName, item: MasterItem | null): FormState {
       district: workshop?.district ?? "",
       province: workshop?.province ?? "",
       specialties: workshop?.specialties.join(", ") ?? "CONFECCION",
+      specialtyDetail: workshop?.specialtyDetail ?? "",
       contacts: formatContactsInput(workshop?.contacts),
     };
   }
@@ -1385,7 +1926,6 @@ function initialForm(resource: MasterName, item: MasterItem | null): FormState {
       name: fabric?.name ?? "",
       color: fabric?.color ?? "",
       weightOz: fabric?.weightOz ?? "",
-      supplier: fabric?.supplier ?? "",
       weaveType: fabric?.weaveType ?? "PUNTO",
       formatType: fabric?.formatType ?? "ABIERTO",
     };
@@ -1397,7 +1937,6 @@ function initialForm(resource: MasterName, item: MasterItem | null): FormState {
       name: supply?.name ?? "",
       description: supply?.description ?? "",
       color: supply?.color ?? "",
-      supplier: supply?.supplier ?? "",
       category: supply?.category ?? "CONFECCION",
     };
   }
@@ -1436,6 +1975,17 @@ function buildPayload(
   form: FormState,
   isEditing: boolean,
 ): Record<string, unknown> {
+  if (resource === "providers") {
+    return compact({
+      businessName: form.businessName,
+      taxId: form.taxId,
+      address: form.address,
+      locality: form.locality,
+      district: form.district,
+      province: form.province,
+      contacts: parseContacts(form.contacts),
+    });
+  }
   if (resource === "users") {
     return compact({
       fullName: form.fullName,
@@ -1453,6 +2003,7 @@ function buildPayload(
       district: form.district,
       province: form.province,
       specialties: splitComma(form.specialties),
+      specialtyDetail: form.specialtyDetail,
       contacts: parseContacts(form.contacts),
     });
   }
@@ -1462,7 +2013,6 @@ function buildPayload(
       name: form.name,
       color: form.color,
       weightOz: form.weightOz ? Number(form.weightOz) : undefined,
-      supplier: form.supplier,
       weaveType: form.weaveType,
       formatType: form.formatType,
     });
@@ -1473,7 +2023,6 @@ function buildPayload(
       name: form.name,
       description: form.description,
       color: form.color,
-      supplier: form.supplier,
       category: form.category,
     });
   }
@@ -1547,8 +2096,29 @@ function parseDecorationParts(value: string) {
   }).filter((part) => part.garmentPart && part.decorationType);
 }
 
-function formatAddress(item: { address?: string | null; locality?: string | null; district?: string | null; province?: string | null }): string {
-  return [item.locality, item.district, item.province].filter(Boolean).join(" / ") || item.address || "Sin direccion";
+
+function parseRolls(value: string) {
+  return value
+    .split("\n")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [code, lot] = entry.split("|").map((part) => part.trim());
+      return { code, lot };
+    })
+    .filter((roll) => roll.code && roll.lot);
+}
+
+function todayInputDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function statusBadge(isActive: boolean) {
+  return <span className={isActive ? styles.masterStatusActive : styles.masterStatusInactive}>{isActive ? "Activo" : "Inactivo"}</span>;
+}
+
+function formatFullAddress(item: { address?: string | null; locality?: string | null; district?: string | null; province?: string | null }): string {
+  return [item.address, item.locality, item.district, item.province].filter(Boolean).join(" / ") || "Sin dirección";
 }
 
 function formatContacts(contacts?: { contactName: string; mobilePhone1?: string | null; fixedPhone?: string | null }[]): string {
@@ -1559,8 +2129,10 @@ function formatContactsInput(contacts?: { contactName: string; email?: string | 
   return (contacts ?? []).map((contact) => [contact.contactName, contact.email ?? "", contact.fixedPhone ?? "", contact.mobilePhone1 ?? "", contact.mobilePhone2 ?? "", contact.roleNote ?? ""].join("|")).join("; ");
 }
 
-function formatPermissions(permissions?: { sectorCode: string | null; action: string; isAllowed: boolean }[]): string {
-  return formatList(permissions?.filter((permission) => permission.isAllowed), (permission) => `${permission.sectorCode ?? "*"}:${permission.action}`, "Sin permisos");
+function formatUserSector(user: UserMaster): string {
+  if (user.role === "ADMIN") return "Admin";
+  const sectors = [...new Set((user.permissions ?? []).filter((permission) => permission.isAllowed && permission.sectorCode).map((permission) => permission.sectorCode))];
+  return sectors.join(", ") || "Sin sector";
 }
 
 function formatPermissionsInput(permissions?: { sectorCode: string | null; action: string; isAllowed: boolean }[]): string {

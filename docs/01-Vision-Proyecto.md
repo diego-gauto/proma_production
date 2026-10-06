@@ -44,11 +44,12 @@ Parte del proceso se terceriza en **talleres externos** (confección, ojal y bot
 - Fecha estimada de finalización opcional por etapa, con aviso si se incumple.
 - Notificaciones dentro de la app (cuellos de botella, incumplimiento de fechas, ingreso y finalización de trabajos).
 - Dashboard doble: vista Kanban y vista de lista/tabla.
-- Alta de Clientes, Talleres externos, Artículos y Usuarios.
+- Alta y gestión de Clientes, Proveedores, Talleres externos, Telas, Avíos, Curvas de talles, Artículos y Usuarios, con baja lógica/reactivación.
+- Ingreso inicial de stock de telas y avíos asociado a Proveedores desde Gestión. El stock de telas se compone como sumatoria de rollos; cada rollo guarda código y lote.
 
 ## 🚫 Qué NO incluye esta primera versión
 
-- Gestión de stock de materiales (se asume que el material está disponible o se marca manualmente como faltante/parcial).
+- Stock avanzado, valuación, precios, costos y movimientos completos de inventario. El MVP solo registra ingresos básicos de telas/avíos para alimentar disponibilidad inicial.
 - Facturación o costos.
 - Gestión de pedidos de cliente (que agrupan varias órdenes).
 - Escaneo por código QR (queda planificado para una segunda etapa).
@@ -60,4 +61,4 @@ Parte del proceso se terceriza en **talleres externos** (confección, ojal y bot
 - Maestro de artículos con avíos y etapas pre-configuradas (hoy se eligen manualmente al crear cada orden).
 - Generación de etiquetas QR por parte, para que cada sector escanee y confirme el cambio de etapa desde el piso de planta.
 - Notificaciones por Telegram.
-- Eventual integración con gestión de stock y pedidos de cliente.
+- Evolución de stock hacia movimientos completos, consumos por orden, ajustes, valuación y pedidos de cliente.
