@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsNumber,
   IsOptional,
   IsString,
@@ -93,4 +94,8 @@ export class UpdateArticleDto {
   @ValidateNested({ each: true })
   @Type(() => ArticleDecorationPartDto)
   decorationParts?: ArticleDecorationPartDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

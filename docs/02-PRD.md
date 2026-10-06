@@ -1,8 +1,8 @@
 # PRD — Sistema de Seguimiento de Producción Textil
 
-**Versión:** 1.1 (MVP)
+**Versión:** 1.2 (MVP)
 **Estado:** Fuente de verdad para implementación
-**Última actualización:** 2026-10-03
+**Última actualización:** 2026-10-05
 
 > Este documento es la única fuente de verdad para implementar el sistema. Cualquier ambigüedad debe resolverse siguiendo lo aquí definido. Si algo no está cubierto, se documenta como supuesto explícito antes de codear.
 
@@ -21,7 +21,8 @@ Sistema web para trackear el recorrido de **órdenes de corte** de una fábrica 
 3. Soportar división de una parte en sub-partes según dos necesidades distintas: separación por lote/cantidad y separación temporal por componentes de prenda para Bordado/Estampado/espera, con reunificación antes de Confección.
 4. Dar visibilidad total a Gerencia/Producción vía dashboard (Kanban + lista).
 5. Emitir notificaciones in-app ante cuellos de botella, incumplimiento de fechas estimadas, ingreso y finalización de trabajos.
-6. Mantener maestros reales de Clientes, Talleres externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
+6. Mantener maestros reales de Clientes, Proveedores, Talleres externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
+7. Registrar ingresos básicos de stock de telas y avíos asociados a Proveedores. Para telas, el stock se compone como sumatoria de rollos con código y lote.
 
 ### 1.3 Usuarios objetivo
 
@@ -35,8 +36,9 @@ Login individual por usuario. Los roles agrupan permisos, pero el acceso real se
 
 ### 1.4 Alcance del MVP — Incluye
 
-- ABM de Clientes, Talleres Externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
+- ABM de Clientes, Proveedores, Talleres Externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos. La baja de maestros es lógica mediante `deleted_at`; reactivar un registro equivale a limpiar esa fecha.
 - Maestro de Artículos con lista de avíos requeridos y partes que pueden bordarse o estamparse.
+- Ingresos básicos de stock de telas y avíos asociados a Proveedores, registrables desde Gestión. Un ingreso de tela se registra por rollos; cada rollo guarda código y lote.
 - Creación de Orden de Corte como asociación entre cliente, artículo, tela, curva de talles, cantidades por talle y taller/ubicación cuando aplique.
 - Chequeo de materiales de inicio de corte (completo/parcial por talle/color/parte).
 - División dinámica de una Parte en Sub-partes en cualquier etapa posterior al corte, distinguiendo divisiones por lote/cantidad de divisiones temporales por componentes decorativos.
@@ -51,7 +53,7 @@ Login individual por usuario. Los roles agrupan permisos, pero el acceso real se
 
 ### 1.5 Alcance del MVP — NO incluye
 
-- Gestión de stock/inventario de telas y avíos (cantidades reales en depósito).
+- Stock avanzado/inventario completo: consumos, ajustes, valuación, precios, costos, reservas y trazabilidad completa. El MVP solo contempla ingresos básicos y rollos de tela.
 - Facturación, costos, precios.
 - Gestión de Pedidos de cliente (agrupación de múltiples órdenes de corte).
 - Despacho al cliente final (fuera de alcance; el sistema termina en la etapa "Terminación").
@@ -151,6 +153,9 @@ order_parts (1) ──< part_supplies (N)             [checklist de avíos de es
 clients (1) ──< client_contacts (N)
 workshops (1) ──< workshop_contacts (N)
 articles (1) ──< article_supplies (N)             [avíos requeridos por producto]
+providers (1) ──< fabric_stock_entries (N)         [ingresos de tela por proveedor]
+providers (1) ──< supply_stock_entries (N)         [ingresos de avíos por proveedor]
+fabric_stock_entries (1) ──< fabric_rolls (N)      [rollos ingresados: código y lote]
 articles (1) ──< article_decoration_parts (N)     [partes bordables/estampables]
 supplies (1) ──< article_supplies (N)
 supplies (1) ──< part_supplies (N)                [checklist operativo por parte]
@@ -294,7 +299,8 @@ CREATE TABLE workshops (
   locality        VARCHAR(120),
   district        VARCHAR(120),
   province        VARCHAR(120),
-  specialties     sector_code[] NOT NULL DEFAULT '{}', -- ej: {CONFECCION, PLANCHA, OJAL_BOTON}
+  specialties     sector_code[] NOT NULL DEFAULT '{}', -- tipo de taller: CONFECCION, PLANCHA, etc.
+  specialty_detail VARCHAR(255),                 -- especialidad real: pantalones, remeras, camperas, etc.
   notes           TEXT,
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -346,7 +352,6 @@ CREATE TABLE fabrics (
   name            VARCHAR(150) NOT NULL,
   color           VARCHAR(80),
   weight_oz       NUMERIC(6,2),                  -- onzaje
-  supplier        VARCHAR(150),
   weave_type      fabric_weave_type NOT NULL,    -- PUNTO | PLANO
   format_type     fabric_format_type NOT NULL,   -- ABIERTO | TUBULAR
   is_active       BOOLEAN NOT NULL DEFAULT true,
@@ -365,7 +370,6 @@ CREATE TABLE supplies (
   name            VARCHAR(150) NOT NULL,
   description     TEXT,
   color           VARCHAR(80),
-  supplier        VARCHAR(150),
   category        supply_category NOT NULL,      -- CONFECCION | TERMINACION
   is_active       BOOLEAN NOT NULL DEFAULT true,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -410,6 +414,67 @@ CREATE TABLE article_decoration_parts (
   decoration_type VARCHAR(30) NOT NULL             -- BORDADO | ESTAMPADO
 );
 CREATE INDEX idx_article_decoration_article ON article_decoration_parts(article_id);
+
+
+-- ============================================================
+-- PROVEEDORES E INGRESOS BASICOS DE STOCK
+-- ============================================================
+CREATE TABLE providers (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_name   VARCHAR(180) NOT NULL,
+  tax_id          VARCHAR(30),
+  address         VARCHAR(255),
+  locality        VARCHAR(120),
+  district        VARCHAR(120),
+  province        VARCHAR(120),
+  notes           TEXT,
+  is_active       BOOLEAN NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE provider_contacts (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_id     UUID NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
+  contact_name    VARCHAR(150) NOT NULL,
+  email           VARCHAR(150),
+  fixed_phone     VARCHAR(50),
+  mobile_phone_1  VARCHAR(50),
+  mobile_phone_2  VARCHAR(50),
+  role_note       VARCHAR(120),
+  is_primary      BOOLEAN NOT NULL DEFAULT false,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE fabric_stock_entries (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_id     UUID NOT NULL REFERENCES providers(id),
+  fabric_id       UUID NOT NULL REFERENCES fabrics(id),
+  entry_date      DATE NOT NULL,
+  document_number VARCHAR(80),
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE fabric_rolls (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fabric_stock_entry_id UUID NOT NULL REFERENCES fabric_stock_entries(id) ON DELETE CASCADE,
+  code            VARCHAR(80) NOT NULL UNIQUE,
+  lot             VARCHAR(80) NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE supply_stock_entries (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  provider_id     UUID NOT NULL REFERENCES providers(id),
+  supply_id       UUID NOT NULL REFERENCES supplies(id),
+  entry_date      DATE NOT NULL,
+  document_number VARCHAR(80),
+  quantity        NUMERIC(12,2) NOT NULL,
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- ============================================================
 -- ÓRDENES DE CORTE (cabecera)

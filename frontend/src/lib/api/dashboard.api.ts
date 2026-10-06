@@ -7,6 +7,7 @@ export type DashboardRow = {
   parentPartId: string | null;
   internalCode: string;
   externalCode: string;
+  createdAt: string;
   clientName: string;
   articleName: string;
   fabricName: string;
@@ -19,6 +20,7 @@ export type DashboardRow = {
   stage: StageOption | null;
   location: string;
   startedAt: string | null;
+  estimatedFinishAt: string | null;
   daysInStage: number | null;
   semaphore: "OK" | "WARNING" | "OVERDUE" | "FINALIZED";
 };
@@ -28,7 +30,16 @@ export type DashboardOrdersResponse = {
   total: number;
 };
 
-export type DashboardKanbanPart = PartNode & { order?: { id: string } };
+export type DashboardKanbanPart = PartNode & {
+  order?: {
+    id: string;
+    internalCode?: string;
+    externalCode?: string;
+    client?: { businessName: string };
+    article?: { name: string };
+    fabric?: { name: string };
+  };
+};
 
 export type DashboardKanbanResponse = {
   stages: { stage: StageOption; parts: DashboardKanbanPart[] }[];

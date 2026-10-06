@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Repository } from 'typeorm';
 import { PaginatedResponse } from '../../common/dto/pagination-query.dto';
 import {
   CreateUserDto,
@@ -41,10 +41,10 @@ export class UsersService {
     const limit = query.limit ?? 20;
     const where = query.search
       ? [
-          { fullName: ILike(`%${query.search}%`), isActive: true },
-          { email: ILike(`%${query.search}%`), isActive: true },
+          { fullName: ILike(`%${query.search}%`), deletedAt: IsNull() },
+          { email: ILike(`%${query.search}%`), deletedAt: IsNull() },
         ]
-      : { isActive: true };
+      : { deletedAt: IsNull() };
     const [items, total] = await this.usersRepository.findAndCount({
       where,
       relations: { permissions: true },
@@ -80,6 +80,10 @@ export class UsersService {
     if (dto.role !== undefined) {
       user.role = dto.role;
     }
+    if (dto.isActive === true) {
+      user.deletedAt = null;
+      user.isActive = true;
+    }
 
     await this.usersRepository.manager.transaction(async (manager) => {
       if (dto.permissions !== undefined) {
@@ -95,6 +99,7 @@ export class UsersService {
   async softDelete(id: string): Promise<UserResponseDto> {
     const user = await this.findEntity(id);
     user.isActive = false;
+    user.deletedAt = new Date();
     await this.usersRepository.save(user);
     return this.findOne(id);
   }
@@ -131,7 +136,7 @@ export class UsersService {
         action: permission.action,
         isAllowed: permission.isAllowed,
       })),
-      isActive: user.isActive,
+      isActive: user.deletedAt ? false : user.isActive,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

@@ -1,26 +1,9 @@
-# Progress - Etapa 8
+# Progress
 
-- Leido `AGENTS.md` completo.
-- Leidos documentos obligatorios: Vision, PRD completo y Plan de Implementacion.
-- Skills usadas: brainstorming, test-driven-development, planning-with-files.
-- `git status` en `main` no mostro cambios locales.
-- Cambiada rama a `develop` y creada `etapa/8-hardening-demo-deploy`.
-- Relevado arbol de backend/frontend/tests/migraciones.
-- Agregado test e2e rojo para permisos de split/recombine; confirmado fallo 201 vs 403.
-- Implementado control de permisos en `split` y `recombine` con `FORZAR_CAMBIO` sectorial/global.
-- `orders.e2e-spec.ts` focalizado: PASS.
-- Agregado test rojo de seed demo por modulo inexistente.
-- Implementado `seedDemoData`, `run-demo-seed.ts` y script `seed:demo`.
-- `demo-seed.spec.ts` focalizado: PASS.
-- Agregados Dockerfiles backend/frontend, `.dockerignore`, checklist deploy MVP y matriz de permisos.
-- Ajustada tabla principal en mobile para evitar corte de datos por overflow oculto.
-- Backend build: PASS.
-- Frontend build: PASS.
-- Frontend test: PASS.
-- Backend test/e2e via `pnpm run ... -- --runInBand`: fallo por pasaje de argumentos, no por suite; se reintenta con `pnpm exec jest`.
-- Backend unit suite completa con `pnpm --dir backend exec jest --runInBand`: PASS.
-- Backend e2e suite completa con `pnpm --dir backend exec jest --config test/jest-e2e.json --runInBand`: PASS.
-- Docker build backend `proma-backend:stage8`: PASS.
-- Docker build frontend `proma-frontend:stage8`: PASS.
-- `pnpm --dir backend run seed:demo`: PASS contra base local.
-- Frontend smoke `curl -I http://localhost:3002/`: 200 OK.
+- Iniciado plan de cambio para proveedores/stock/listados/docs.
+
+- Implementado modulo Inventory con proveedores, ingresos de tela, rollos e ingresos de avios.
+- Quitado supplier del modelo de telas y avios.
+- Frontend actualizado con Proveedores, columnas revisadas, paginacion y perfil/logout.
+- PRD, Vision y Plan de Implementacion actualizados.
+- Verificacion OK: backend build/test/e2e masters, frontend build/test, API local providers 200, frontend 200.

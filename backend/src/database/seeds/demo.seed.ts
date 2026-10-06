@@ -227,8 +227,8 @@ async function upsertWorkshop(manager: DataSource['manager'], name: string, spec
 async function upsertFabric(manager: DataSource['manager'], code: string, name: string): Promise<IdRow> {
   const rows = await manager.query(
     `
-      INSERT INTO fabrics (code, name, color, weave_type, format_type, supplier)
-      VALUES ($1, $2, 'Azul', $3, $4, 'Proveedor demo')
+      INSERT INTO fabrics (code, name, color, weave_type, format_type)
+      VALUES ($1, $2, 'Azul', $3, $4)
       ON CONFLICT (code)
       DO UPDATE SET name = EXCLUDED.name, is_active = true, updated_at = now()
       RETURNING id
@@ -246,8 +246,8 @@ async function upsertSupply(
 ): Promise<IdRow> {
   const rows = await manager.query(
     `
-      INSERT INTO supplies (code, name, category, supplier)
-      VALUES ($1, $2, $3, 'Proveedor demo')
+      INSERT INTO supplies (code, name, category)
+      VALUES ($1, $2, $3)
       ON CONFLICT (code)
       DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category, is_active = true, updated_at = now()
       RETURNING id

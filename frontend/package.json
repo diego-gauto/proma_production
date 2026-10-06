@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "rm -rf /tmp/proma-frontend-test && tsc src/lib/api/client.ts src/lib/api/client.test.ts src/lib/api/notifications.api.ts src/lib/api/notifications.api.test.ts src/lib/formatters/master-formatters.ts src/lib/formatters/master-formatters.test.ts --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop --outDir /tmp/proma-frontend-test && node --test /tmp/proma-frontend-test/api/client.test.js /tmp/proma-frontend-test/api/notifications.api.test.js /tmp/proma-frontend-test/formatters/master-formatters.test.js"
+    "test": "rm -rf /tmp/proma-frontend-test && tsc src/lib/api/client.ts src/lib/api/client.test.ts src/lib/api/notifications.api.ts src/lib/api/notifications.api.test.ts src/lib/api/masters.api.ts src/lib/api/inventory.api.ts src/lib/api/inventory.api.test.ts src/lib/api/orders.api.ts src/lib/api/orders.api.test.ts src/lib/formatters/master-formatters.ts src/lib/formatters/master-formatters.test.ts --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --esModuleInterop --outDir /tmp/proma-frontend-test && node --test /tmp/proma-frontend-test/api/client.test.js /tmp/proma-frontend-test/api/notifications.api.test.js /tmp/proma-frontend-test/api/inventory.api.test.js /tmp/proma-frontend-test/api/orders.api.test.js /tmp/proma-frontend-test/formatters/master-formatters.test.js"
   },
   "dependencies": {
     "react": "19.1.0",

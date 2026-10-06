@@ -212,6 +212,7 @@ describe('Masters CRUD (e2e)', () => {
         district: 'Morón',
         province: 'Buenos Aires',
         specialties: [SectorCode.CONFECCION, SectorCode.PLANCHA],
+        specialtyDetail: 'Pantalones y camperas',
         contacts: [
           {
             contactName: 'Encargado Taller',
@@ -225,6 +226,7 @@ describe('Masters CRUD (e2e)', () => {
     ).expect(201);
 
     expect(created.body.taxId).toBeUndefined();
+    expect(created.body.specialtyDetail).toBe('Pantalones y camperas');
     expect(created.body.contacts).toHaveLength(1);
 
     const filtered = await auth(
@@ -244,7 +246,6 @@ describe('Masters CRUD (e2e)', () => {
         name: 'Frisa pesada',
         color: 'Azul marino',
         weightOz: 8.5,
-        supplier: 'Proveedor Textil',
         weaveType: FabricWeaveType.PUNTO,
         formatType: FabricFormatType.TUBULAR,
       }),
@@ -253,14 +254,12 @@ describe('Masters CRUD (e2e)', () => {
     expect(fabric.body).toMatchObject({
       code: `TELA-${suffix}`,
       weightOz: '8.50',
-      supplier: 'Proveedor Textil',
       weaveType: FabricWeaveType.PUNTO,
       formatType: FabricFormatType.TUBULAR,
     });
 
     const fabricFiltered = await auth(
       request(app.getHttpServer()).get('/api/v1/fabrics').query({
-        supplier: 'Proveedor Textil',
         weaveType: FabricWeaveType.PUNTO,
         formatType: FabricFormatType.TUBULAR,
         search: suffix,
@@ -276,7 +275,6 @@ describe('Masters CRUD (e2e)', () => {
         name: 'Cierre reforzado',
         description: 'Cierre diente perro 20cm',
         color: 'Negro',
-        supplier: 'Proveedor Avíos',
         category: SupplyCategory.CONFECCION,
       }),
     ).expect(201);
@@ -310,7 +308,6 @@ describe('Masters CRUD (e2e)', () => {
         code: `ART-SUP-1-${suffix}`,
         name: 'Botón negro',
         color: 'Negro',
-        supplier: 'Proveedor Avíos',
         category: SupplyCategory.TERMINACION,
       }),
     ).expect(201);
@@ -319,7 +316,6 @@ describe('Masters CRUD (e2e)', () => {
         code: `ART-SUP-2-${suffix}`,
         name: 'Etiqueta talle',
         color: 'Blanco',
-        supplier: 'Proveedor Avíos',
         category: SupplyCategory.CONFECCION,
       }),
     ).expect(201);
@@ -361,6 +357,90 @@ describe('Masters CRUD (e2e)', () => {
     expect(article.body.decorationParts).toHaveLength(2);
   });
 
+
+
+  it('keeps suppliers outside fabric and supply masters and records stock entries', async () => {
+    await auth(
+      request(app.getHttpServer()).post('/api/v1/fabrics').send({
+        code: `TELA-SUPPLIER-INVALID-${suffix}`,
+        name: 'Tela con proveedor invalido',
+        color: 'Negro',
+        weightOz: 7,
+        supplier: 'No debe existir',
+        weaveType: FabricWeaveType.PLANO,
+        formatType: FabricFormatType.ABIERTO,
+      }),
+    ).expect(400);
+
+    await auth(
+      request(app.getHttpServer()).post('/api/v1/supplies').send({
+        code: `AVIO-SUPPLIER-INVALID-${suffix}`,
+        name: 'Avio con proveedor invalido',
+        supplier: 'No debe existir',
+        category: SupplyCategory.CONFECCION,
+      }),
+    ).expect(400);
+
+    const provider = await auth(
+      request(app.getHttpServer()).post('/api/v1/providers').send({
+        businessName: `Proveedor ${suffix}`,
+        taxId: `PR-${suffix}`.slice(0, 30),
+        address: 'Calle Proveedor 123',
+        locality: 'San Martin',
+        contacts: [{ contactName: 'Compras Proveedor', mobilePhone1: '11-9999-1111', isPrimary: true }],
+      }),
+    ).expect(201);
+
+    const fabric = await auth(
+      request(app.getHttpServer()).post('/api/v1/fabrics').send({
+        code: `TELA-STOCK-${suffix}`,
+        name: 'Gabardina stock',
+        color: 'Azul',
+        weightOz: 8,
+        weaveType: FabricWeaveType.PLANO,
+        formatType: FabricFormatType.ABIERTO,
+      }),
+    ).expect(201);
+
+    const fabricEntry = await auth(
+      request(app.getHttpServer()).post('/api/v1/fabric-stock-entries').send({
+        providerId: provider.body.id,
+        fabricId: fabric.body.id,
+        entryDate: '2026-10-05',
+        documentNumber: `REM-T-${suffix}`,
+        rolls: [
+          { code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}` },
+          { code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}` },
+        ],
+      }),
+    ).expect(201);
+    expect(fabricEntry.body.rolls).toEqual([
+      expect.objectContaining({ code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}` }),
+      expect.objectContaining({ code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}` }),
+    ]);
+
+    const supply = await auth(
+      request(app.getHttpServer()).post('/api/v1/supplies').send({
+        code: `AVIO-STOCK-${suffix}`,
+        name: 'Boton stock',
+        description: 'Boton plastico',
+        color: 'Negro',
+        category: SupplyCategory.TERMINACION,
+      }),
+    ).expect(201);
+
+    const supplyEntry = await auth(
+      request(app.getHttpServer()).post('/api/v1/supply-stock-entries').send({
+        providerId: provider.body.id,
+        supplyId: supply.body.id,
+        entryDate: '2026-10-05',
+        documentNumber: `REM-A-${suffix}`,
+        quantity: 250,
+      }),
+    ).expect(201);
+    expect(supplyEntry.body).toMatchObject({ quantity: '250.00' });
+  });
+
   it('supports users with custom permissions and hides password hashes', async () => {
     const created = await auth(
       request(app.getHttpServer()).post('/api/v1/users').send({
@@ -396,4 +476,47 @@ describe('Masters CRUD (e2e)', () => {
       expect.arrayContaining([expect.objectContaining({ id: created.body.id })]),
     );
   });
+
+  it('stores logical deletion with deleted_at and hides deleted masters from listings', async () => {
+    const created = await auth(
+      request(app.getHttpServer()).post('/api/v1/clients').send({
+        businessName: `Cliente baja lógica ${suffix}`,
+        taxId: `30-${Date.now().toString().slice(-8)}-9`,
+      }),
+    ).expect(201);
+
+    await auth(
+      request(app.getHttpServer()).delete(`/api/v1/clients/${created.body.id}`),
+    )
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.isActive).toBe(false);
+        expect(body.deletedAt).toBeTruthy();
+      });
+
+    const listed = await auth(
+      request(app.getHttpServer()).get('/api/v1/clients').query({ search: 'Cliente baja lógica' }),
+    ).expect(200);
+    expect(listed.body.items).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: created.body.id })]),
+    );
+
+    const rows = await dataSource.query(
+      'SELECT deleted_at FROM clients WHERE id = $1',
+      [created.body.id],
+    );
+    expect(rows[0].deleted_at).toBeTruthy();
+
+    await auth(
+      request(app.getHttpServer())
+        .patch(`/api/v1/clients/${created.body.id}`)
+        .send({ isActive: true }),
+    )
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.isActive).toBe(true);
+        expect(body.deletedAt).toBeNull();
+      });
+  });
+
 });

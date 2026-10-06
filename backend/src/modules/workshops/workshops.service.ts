@@ -33,7 +33,7 @@ export class WorkshopsService {
     const queryBuilder = this.workshopsRepository
       .createQueryBuilder('workshop')
       .leftJoinAndSelect('workshop.contacts', 'contact')
-      .where('workshop.is_active = true')
+      .where('workshop.deleted_at IS NULL')
       .orderBy('workshop.name', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -72,6 +72,10 @@ export class WorkshopsService {
     await this.workshopsRepository.manager.transaction(async (manager) => {
       const { contacts, ...workshopFields } = dto;
       Object.assign(workshop, workshopFields);
+      if (workshopFields.isActive === true) {
+        workshop.deletedAt = null;
+        workshop.isActive = true;
+      }
       if (contacts) {
         await manager.delete(WorkshopContact, { workshop: { id } });
         workshop.contacts = contacts.map((contact) =>
@@ -86,6 +90,7 @@ export class WorkshopsService {
   async softDelete(id: string): Promise<Workshop> {
     const workshop = await this.findOne(id);
     workshop.isActive = false;
+    workshop.deletedAt = new Date();
     return this.workshopsRepository.save(workshop);
   }
 }

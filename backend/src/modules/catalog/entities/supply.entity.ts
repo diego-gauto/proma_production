@@ -27,14 +27,14 @@ export class Supply {
   @Column({ name: 'color', type: 'varchar', length: 80, nullable: true })
   color?: string | null;
 
-  @Column({ name: 'supplier', type: 'varchar', length: 150, nullable: true })
-  supplier?: string | null;
-
   @Column({ name: 'category', type: 'enum', enum: SupplyCategory, enumName: 'supply_category' })
   category!: SupplyCategory;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

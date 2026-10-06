@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Repository } from 'typeorm';
 import { PaginatedResponse } from '../../common/dto/pagination-query.dto';
 import { Supply } from '../catalog/entities/supply.entity';
 import {
@@ -39,10 +39,10 @@ export class ArticlesService {
     const limit = query.limit ?? 20;
     const where = query.search
       ? [
-          { code: ILike(`%${query.search}%`), isActive: true },
-          { name: ILike(`%${query.search}%`), isActive: true },
+          { code: ILike(`%${query.search}%`), deletedAt: IsNull() },
+          { name: ILike(`%${query.search}%`), deletedAt: IsNull() },
         ]
-      : { isActive: true };
+      : { deletedAt: IsNull() };
     const [items, total] = await this.articlesRepository.findAndCount({
       where,
       relations: {
@@ -83,6 +83,10 @@ export class ArticlesService {
     if (dto.description !== undefined) {
       article.description = dto.description;
     }
+    if (dto.isActive === true) {
+      article.deletedAt = null;
+      article.isActive = true;
+    }
 
     await this.articlesRepository.manager.transaction(async (manager) => {
       if (dto.supplies !== undefined) {
@@ -102,6 +106,7 @@ export class ArticlesService {
   async softDelete(id: string): Promise<Article> {
     const article = await this.findOne(id);
     article.isActive = false;
+    article.deletedAt = new Date();
     return this.articlesRepository.save(article);
   }
 
