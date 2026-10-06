@@ -38,3 +38,68 @@
   color: #9da3d3;
   text-align: center;
 }
+
+/* Lovable management table alignment */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.table {
+  min-width: 850px;
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table th {
+  background: var(--surface-raised);
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.table td {
+  height: 56px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.table tbody tr {
+  background: var(--surface);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.table tbody tr:hover,
+.clickableRow:focus-visible {
+  background: var(--surface-raised);
+  outline: none;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.table th:last-child,
+.table td:last-child {
+  width: 54px;
+  text-align: right;
+}
+
+.empty {
+  color: var(--muted-foreground);
+  text-align: center;
+}

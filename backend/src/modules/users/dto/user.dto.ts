@@ -77,6 +77,10 @@ export class UpdateUserDto {
   @ValidateNested({ each: true })
   @Type(() => UserPermissionDto)
   permissions?: UserPermissionDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export type UserResponseDto = {

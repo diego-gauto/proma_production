@@ -5,9 +5,10 @@ type TableProps<T> = {
   columns: { key: string; label: string; render: (item: T) => ReactNode }[];
   items: T[];
   emptyText: string;
+  onRowClick?: (item: T) => void;
 };
 
-export function Table<T>({ columns, items, emptyText }: TableProps<T>) {
+export function Table<T>({ columns, items, emptyText, onRowClick }: TableProps<T>) {
   return (
     <div className={styles.tableWrap}>
       <table className={styles.table}>
@@ -27,7 +28,18 @@ export function Table<T>({ columns, items, emptyText }: TableProps<T>) {
             </tr>
           ) : (
             items.map((item, index) => (
-              <tr key={index}>
+              <tr
+                key={index}
+                className={onRowClick ? styles.clickableRow : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={() => onRowClick?.(item)}
+                onKeyDown={(event) => {
+                  if (onRowClick && (event.key === "Enter" || event.key === " ")) {
+                    event.preventDefault();
+                    onRowClick(item);
+                  }
+                }}
+              >
                 {columns.map((column) => (
                   <td key={column.key}>{column.render(item)}</td>
                 ))}

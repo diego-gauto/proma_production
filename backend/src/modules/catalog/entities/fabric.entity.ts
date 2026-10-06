@@ -27,9 +27,6 @@ export class Fabric {
   @Column({ name: 'weight_oz', type: 'numeric', precision: 6, scale: 2, nullable: true })
   weightOz?: string | null;
 
-  @Column({ name: 'supplier', type: 'varchar', length: 150, nullable: true })
-  supplier?: string | null;
-
   @Column({ name: 'weave_type', type: 'enum', enum: FabricWeaveType, enumName: 'fabric_weave_type' })
   weaveType!: FabricWeaveType;
 
@@ -38,6 +35,9 @@ export class Fabric {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt?: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

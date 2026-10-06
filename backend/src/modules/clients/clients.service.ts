@@ -29,7 +29,7 @@ export class ClientsService {
     const queryBuilder = this.clientsRepository
       .createQueryBuilder('client')
       .leftJoinAndSelect('client.contacts', 'contact')
-      .where('client.is_active = true')
+      .where('client.deleted_at IS NULL')
       .orderBy('client.businessName', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -62,6 +62,10 @@ export class ClientsService {
     await this.clientsRepository.manager.transaction(async (manager) => {
       const { contacts, ...clientFields } = dto;
       Object.assign(client, clientFields);
+      if (clientFields.isActive === true) {
+        client.deletedAt = null;
+        client.isActive = true;
+      }
       if (contacts) {
         await manager.delete(ClientContact, { client: { id } });
         client.contacts = contacts.map((contact) =>
@@ -76,6 +80,7 @@ export class ClientsService {
   async softDelete(id: string): Promise<Client> {
     const client = await this.findOne(id);
     client.isActive = false;
+    client.deletedAt = new Date();
     return this.clientsRepository.save(client);
   }
 }

@@ -127,4 +127,8 @@ export class UpdateClientDto {
   @ValidateNested({ each: true })
   @Type(() => ClientContactDto)
   contacts?: ClientContactDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }

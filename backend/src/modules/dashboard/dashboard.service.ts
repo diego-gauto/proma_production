@@ -19,6 +19,7 @@ type DashboardRow = {
   parentPartId: string | null;
   internalCode: string;
   externalCode: string;
+  createdAt: Date;
   clientName: string;
   articleName: string;
   fabricName: string;
@@ -31,6 +32,7 @@ type DashboardRow = {
   stage: Stage | null;
   location: string;
   startedAt: Date | null;
+  estimatedFinishAt: Date | null;
   daysInStage: number | null;
   semaphore: 'OK' | 'WARNING' | 'OVERDUE' | 'FINALIZED';
 };
@@ -225,6 +227,7 @@ export class DashboardService {
       parentPartId: part.parentPartId ?? null,
       internalCode: order.internalCode,
       externalCode: order.externalCode,
+      createdAt: order.createdAt,
       clientName: order.client.businessName,
       articleName: order.article.name,
       fabricName: part.fabric?.name ?? order.fabric.name,
@@ -242,6 +245,7 @@ export class DashboardService {
         order.initialWorkshop?.name ??
         'Planta interna',
       startedAt,
+      estimatedFinishAt: activeEvent?.estimatedFinishAt ?? null,
       daysInStage,
       semaphore: this.semaphore(order.status, activeEvent),
     };

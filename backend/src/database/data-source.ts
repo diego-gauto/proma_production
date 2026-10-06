@@ -7,6 +7,9 @@ import { SeedInitialAdminUser1724630400000 } from './migrations/1724630400000-Se
 import { RectifyPhaseThreeMasters1791055000000 } from './migrations/1791055000000-RectifyPhaseThreeMasters';
 import { FixPhaseThreeLegacyColumns1791055100000 } from './migrations/1791055100000-FixPhaseThreeLegacyColumns';
 import { AddOrderCreationRelations1791055200000 } from './migrations/1791055200000-AddOrderCreationRelations';
+import { AddProvidersAndStockEntries1791055300000 } from './migrations/1791055300000-AddProvidersAndStockEntries';
+import { AddWorkshopSpecialtyDetail1791055400000 } from './migrations/1791055400000-AddWorkshopSpecialtyDetail';
+import { AddDeletedAtToMasters1791055500000 } from './migrations/1791055500000-AddDeletedAtToMasters';
 
 config({ path: ['.env.local', '.env'] });
 
@@ -23,5 +26,8 @@ export default new DataSource({
     RectifyPhaseThreeMasters1791055000000,
     FixPhaseThreeLegacyColumns1791055100000,
     AddOrderCreationRelations1791055200000,
+    AddProvidersAndStockEntries1791055300000,
+    AddWorkshopSpecialtyDetail1791055400000,
+      AddDeletedAtToMasters1791055500000,
   ],
 });

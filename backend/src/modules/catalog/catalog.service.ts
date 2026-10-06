@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, Repository } from 'typeorm';
+import { ILike, IsNull, Repository } from 'typeorm';
 import {
   PaginatedResponse,
   PaginationQueryDto,
@@ -47,9 +47,6 @@ export class CatalogService {
 
   findFabrics(query: CatalogQueryDto): Promise<PaginatedResponse<Fabric>> {
     return this.findPaginated(this.fabricsRepository, query, (qb) => {
-      if (query.supplier) {
-        qb.andWhere('item.supplier ILIKE :supplier', { supplier: `%${query.supplier}%` });
-      }
       if (query.weaveType) {
         qb.andWhere('item.weave_type = :weaveType', { weaveType: query.weaveType });
       }
@@ -74,12 +71,17 @@ export class CatalogService {
       weightOz:
         dto.weightOz !== undefined ? dto.weightOz.toFixed(2) : fabric.weightOz,
     });
+    if (dto.isActive === true) {
+      fabric.deletedAt = null;
+      fabric.isActive = true;
+    }
     return this.fabricsRepository.save(fabric);
   }
 
   async softDeleteFabric(id: string): Promise<Fabric> {
     const fabric = await this.findFabric(id);
     fabric.isActive = false;
+    fabric.deletedAt = new Date();
     return this.fabricsRepository.save(fabric);
   }
 
@@ -89,9 +91,6 @@ export class CatalogService {
 
   findSupplies(query: CatalogQueryDto): Promise<PaginatedResponse<Supply>> {
     return this.findPaginated(this.suppliesRepository, query, (qb) => {
-      if (query.supplier) {
-        qb.andWhere('item.supplier ILIKE :supplier', { supplier: `%${query.supplier}%` });
-      }
       if (query.category) {
         qb.andWhere('item.category = :category', { category: query.category });
       }
@@ -109,12 +108,17 @@ export class CatalogService {
   async updateSupply(id: string, dto: UpdateSupplyDto): Promise<Supply> {
     const supply = await this.findSupply(id);
     Object.assign(supply, dto);
+    if (dto.isActive === true) {
+      supply.deletedAt = null;
+      supply.isActive = true;
+    }
     return this.suppliesRepository.save(supply);
   }
 
   async softDeleteSupply(id: string): Promise<Supply> {
     const supply = await this.findSupply(id);
     supply.isActive = false;
+    supply.deletedAt = new Date();
     return this.suppliesRepository.save(supply);
   }
 
@@ -134,7 +138,7 @@ export class CatalogService {
   ): Promise<PaginatedResponse<SizeCurve>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = query.search ? { name: ILike(`%${query.search}%`) } : {};
+    const where = query.search ? { name: ILike(`%${query.search}%`), deletedAt: IsNull() } : { deletedAt: IsNull() };
     const [items, total] = await this.sizeCurvesRepository.findAndCount({
       where,
       relations: { values: true },
@@ -169,6 +173,9 @@ export class CatalogService {
         name: dto.name ?? sizeCurve.name,
         sequenceType: dto.sequenceType ?? sizeCurve.sequenceType,
       });
+      if (dto.isActive === true) {
+        sizeCurve.deletedAt = null;
+      }
 
       if (dto.values) {
         await manager.delete(SizeCurveValue, { sizeCurve: { id } });
@@ -185,8 +192,8 @@ export class CatalogService {
 
   async deleteSizeCurve(id: number): Promise<SizeCurve> {
     const sizeCurve = await this.findSizeCurve(id);
-    await this.sizeCurvesRepository.remove(sizeCurve);
-    return sizeCurve;
+    sizeCurve.deletedAt = new Date();
+    return this.sizeCurvesRepository.save(sizeCurve);
   }
 
   private async findPaginated<T extends { name: string }>(
@@ -198,7 +205,7 @@ export class CatalogService {
     const limit = query.limit ?? 20;
     const queryBuilder = repository
       .createQueryBuilder('item')
-      .where('item.is_active = true')
+      .where('item.deleted_at IS NULL')
       .orderBy('item.name', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
