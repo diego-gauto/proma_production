@@ -409,14 +409,14 @@ describe('Masters CRUD (e2e)', () => {
         entryDate: '2026-10-05',
         documentNumber: `REM-T-${suffix}`,
         rolls: [
-          { code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}` },
-          { code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}` },
+          { code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}`, quantity: 25 },
+          { code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}`, quantity: 30 },
         ],
       }),
     ).expect(201);
     expect(fabricEntry.body.rolls).toEqual([
-      expect.objectContaining({ code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}` }),
-      expect.objectContaining({ code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}` }),
+      expect.objectContaining({ code: `ROLLO-1-${suffix}`, lot: `LOTE-A-${suffix}`, originalQuantity: '25.00', currentQuantity: '25.00' }),
+      expect.objectContaining({ code: `ROLLO-2-${suffix}`, lot: `LOTE-A-${suffix}`, originalQuantity: '30.00', currentQuantity: '30.00' }),
     ]);
 
     const supply = await auth(
@@ -439,6 +439,50 @@ describe('Masters CRUD (e2e)', () => {
       }),
     ).expect(201);
     expect(supplyEntry.body).toMatchObject({ quantity: '250.00' });
+
+    const fabricStock = await auth(
+      request(app.getHttpServer()).get('/api/v1/stock/fabrics').query({ search: `TELA-STOCK-${suffix}` }),
+    ).expect(200);
+    expect(fabricStock.body.items[0]).toMatchObject({
+      rollCount: 2,
+      originalQuantity: 55,
+      currentQuantity: 55,
+    });
+
+    const fabricDetail = await auth(
+      request(app.getHttpServer()).get(`/api/v1/stock/fabrics/${fabric.body.id}`),
+    ).expect(200);
+    expect(fabricDetail.body.rolls).toHaveLength(2);
+
+    await auth(
+      request(app.getHttpServer()).post(`/api/v1/stock/fabric-rolls/${fabricDetail.body.rolls[0].id}/adjustments`).send({
+        quantityDelta: -5,
+        reason: 'USO',
+        note: 'OC test',
+      }),
+    ).expect(201);
+
+    const adjustedFabric = await auth(
+      request(app.getHttpServer()).get(`/api/v1/stock/fabrics/${fabric.body.id}`),
+    ).expect(200);
+    expect(adjustedFabric.body.currentQuantity).toBe(50);
+
+    const supplyStock = await auth(
+      request(app.getHttpServer()).get('/api/v1/stock/supplies').query({ search: `AVIO-STOCK-${suffix}` }),
+    ).expect(200);
+    expect(supplyStock.body.items[0]).toMatchObject({ currentQuantity: 250 });
+
+    await auth(
+      request(app.getHttpServer()).post(`/api/v1/stock/supplies/${supply.body.id}/adjustments`).send({
+        quantityDelta: -20,
+        reason: 'CORRECCION',
+      }),
+    ).expect(201);
+
+    const supplyDetail = await auth(
+      request(app.getHttpServer()).get(`/api/v1/stock/supplies/${supply.body.id}`),
+    ).expect(200);
+    expect(supplyDetail.body.currentQuantity).toBe(230);
   });
 
   it('supports users with custom permissions and hides password hashes', async () => {

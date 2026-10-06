@@ -1,8 +1,8 @@
 # PRD — Sistema de Seguimiento de Producción Textil
 
-**Versión:** 1.2 (MVP)
+**Versión:** 1.3 (MVP)
 **Estado:** Fuente de verdad para implementación
-**Última actualización:** 2026-10-05
+**Última actualización:** 2026-10-06
 
 > Este documento es la única fuente de verdad para implementar el sistema. Cualquier ambigüedad debe resolverse siguiendo lo aquí definido. Si algo no está cubierto, se documenta como supuesto explícito antes de codear.
 
@@ -22,7 +22,7 @@ Sistema web para trackear el recorrido de **órdenes de corte** de una fábrica 
 4. Dar visibilidad total a Gerencia/Producción vía dashboard (Kanban + lista).
 5. Emitir notificaciones in-app ante cuellos de botella, incumplimiento de fechas estimadas, ingreso y finalización de trabajos.
 6. Mantener maestros reales de Clientes, Proveedores, Talleres externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos.
-7. Registrar ingresos básicos de stock de telas y avíos asociados a Proveedores. Para telas, el stock se compone como sumatoria de rollos con código y lote.
+7. Gestionar stock operativo de telas y avíos desde una ruta propia de Stock. Para telas, el stock se compone por rollos con código, lote, cantidad original y cantidad disponible. Para avíos, el stock se gestiona por cantidad total disponible.
 
 ### 1.3 Usuarios objetivo
 
@@ -38,7 +38,7 @@ Login individual por usuario. Los roles agrupan permisos, pero el acceso real se
 
 - ABM de Clientes, Proveedores, Talleres Externos, Telas, Avíos, Curvas de talles, Artículos, Usuarios y permisos. La baja de maestros es lógica mediante `deleted_at`; reactivar un registro equivale a limpiar esa fecha.
 - Maestro de Artículos con lista de avíos requeridos y partes que pueden bordarse o estamparse.
-- Ingresos básicos de stock de telas y avíos asociados a Proveedores, registrables desde Gestión. Un ingreso de tela se registra por rollos; cada rollo guarda código y lote.
+- Stock operativo de Telas y Avíos en una ruta propia de Stock, separada de Gestión. Permite listar saldos generales, consultar detalle, registrar ingresos/compras y cargar ajustes manuales. Un ingreso de tela se registra por rollos; cada rollo guarda código, lote, cantidad original y cantidad disponible.
 - Creación de Orden de Corte como asociación entre cliente, artículo, tela, curva de talles, cantidades por talle y taller/ubicación cuando aplique.
 - Chequeo de materiales de inicio de corte (completo/parcial por talle/color/parte).
 - División dinámica de una Parte en Sub-partes en cualquier etapa posterior al corte, distinguiendo divisiones por lote/cantidad de divisiones temporales por componentes decorativos.
@@ -53,7 +53,7 @@ Login individual por usuario. Los roles agrupan permisos, pero el acceso real se
 
 ### 1.5 Alcance del MVP — NO incluye
 
-- Stock avanzado/inventario completo: consumos, ajustes, valuación, precios, costos, reservas y trazabilidad completa. El MVP solo contempla ingresos básicos y rollos de tela.
+- Valuación, precios, costos, reservas de stock y consumo automático por orden de corte. El MVP contempla ingresos, saldos, detalle por rollo/avío y ajustes manuales; el descuento automático contra órdenes requiere una decisión posterior sobre el momento exacto de consumo.
 - Facturación, costos, precios.
 - Gestión de Pedidos de cliente (agrupación de múltiples órdenes de corte).
 - Despacho al cliente final (fuera de alcance; el sistema termina en la etapa "Terminación").
@@ -155,7 +155,9 @@ workshops (1) ──< workshop_contacts (N)
 articles (1) ──< article_supplies (N)             [avíos requeridos por producto]
 providers (1) ──< fabric_stock_entries (N)         [ingresos de tela por proveedor]
 providers (1) ──< supply_stock_entries (N)         [ingresos de avíos por proveedor]
-fabric_stock_entries (1) ──< fabric_rolls (N)      [rollos ingresados: código y lote]
+fabric_stock_entries (1) ──< fabric_rolls (N)      [rollos ingresados: código, lote, cantidad original/disponible]
+fabric_rolls (1) ──< stock_adjustments (N)          [usos/correcciones manuales sobre rollos]
+supplies (1) ──< stock_adjustments (N)              [usos/correcciones manuales sobre avíos]
 articles (1) ──< article_decoration_parts (N)     [partes bordables/estampables]
 supplies (1) ──< article_supplies (N)
 supplies (1) ──< part_supplies (N)                [checklist operativo por parte]
@@ -462,6 +464,8 @@ CREATE TABLE fabric_rolls (
   fabric_stock_entry_id UUID NOT NULL REFERENCES fabric_stock_entries(id) ON DELETE CASCADE,
   code            VARCHAR(80) NOT NULL UNIQUE,
   lot             VARCHAR(80) NOT NULL,
+  original_quantity NUMERIC(12,2) NOT NULL DEFAULT 0,
+  current_quantity  NUMERIC(12,2) NOT NULL DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -474,6 +478,20 @@ CREATE TABLE supply_stock_entries (
   quantity        NUMERIC(12,2) NOT NULL,
   note            TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE stock_adjustments (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fabric_roll_id  UUID REFERENCES fabric_rolls(id) ON DELETE CASCADE,
+  supply_id       UUID REFERENCES supplies(id) ON DELETE CASCADE,
+  quantity_delta  NUMERIC(12,2) NOT NULL,
+  reason          VARCHAR(30) NOT NULL, -- USO, CORRECCION, ROTURA, DEVOLUCION
+  note            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_stock_adjustment_target CHECK (
+    (fabric_roll_id IS NOT NULL AND supply_id IS NULL) OR
+    (fabric_roll_id IS NULL AND supply_id IS NOT NULL)
+  )
 );
 
 -- ============================================================
@@ -1464,6 +1482,7 @@ CMD ["pnpm", "start"]
 - [ ] Módulo Notifications (CRUD + WebSocket gateway)
 - [ ] Módulo Scheduler (cron cuellos de botella + fechas vencidas)
 - [ ] Módulo Dashboard (agregaciones para kanban/summary)
+- [ ] Módulo Inventory/Stock (proveedores, ingresos, saldos, detalle por rollo/avío y ajustes manuales)
 - [ ] Swagger documentado en todos los endpoints
 
 ### Frontend
@@ -1471,6 +1490,7 @@ CMD ["pnpm", "start"]
 - [ ] Login + manejo de sesión (JWT en cookie httpOnly o localStorage según decisión de seguridad)
 - [ ] Layout autenticado (Navbar + Sidebar + NotificationBell con WS)
 - [ ] Pantallas ABM: Clientes, Talleres, Telas, Avíos, Curvas, Artículos, Usuarios/Permisos, Configuración
+- [ ] Pantalla Stock: acceso principal, separación Telas/Avíos, ingresos/compras, detalle y ajustes manuales
 - [ ] Crear Orden (formulario con selects de tela/color/talles/etapas aplicables)
 - [ ] Detalle de Orden: árbol de partes + selector de etapa a visualizar
 - [ ] Acción: iniciar/finalizar etapa (con selección interno/externo + taller)

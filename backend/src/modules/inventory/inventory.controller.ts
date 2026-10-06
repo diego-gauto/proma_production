@@ -5,8 +5,10 @@ import { PermissionAction, UserRole } from '../users/entities/user.enums';
 import {
   CreateFabricStockEntryDto,
   CreateProviderDto,
+  CreateStockAdjustmentDto,
   CreateSupplyStockEntryDto,
   ProviderQueryDto,
+  StockQueryDto,
   UpdateProviderDto,
 } from './dto/inventory.dto';
 import { InventoryService } from './inventory.service';
@@ -53,5 +55,39 @@ export class InventoryController {
   @Permissions({ action: PermissionAction.ADMINISTRAR })
   createSupplyEntry(@Body() dto: CreateSupplyStockEntryDto) {
     return this.inventoryService.createSupplyEntry(dto);
+  }
+
+  @Get('stock/fabrics')
+  listFabricStock(@Query() query: StockQueryDto) {
+    return this.inventoryService.listFabricStock(query);
+  }
+
+  @Get('stock/fabrics/:id')
+  getFabricStockDetail(@Param('id') id: string) {
+    return this.inventoryService.getFabricStockDetail(id);
+  }
+
+  @Get('stock/supplies')
+  listSupplyStock(@Query() query: StockQueryDto) {
+    return this.inventoryService.listSupplyStock(query);
+  }
+
+  @Get('stock/supplies/:id')
+  getSupplyStockDetail(@Param('id') id: string) {
+    return this.inventoryService.getSupplyStockDetail(id);
+  }
+
+  @Post('stock/fabric-rolls/:id/adjustments')
+  @Roles(UserRole.ADMIN)
+  @Permissions({ action: PermissionAction.ADMINISTRAR })
+  adjustFabricRollStock(@Param('id') id: string, @Body() dto: CreateStockAdjustmentDto) {
+    return this.inventoryService.adjustFabricRollStock(id, dto);
+  }
+
+  @Post('stock/supplies/:id/adjustments')
+  @Roles(UserRole.ADMIN)
+  @Permissions({ action: PermissionAction.ADMINISTRAR })
+  adjustSupplyStock(@Param('id') id: string, @Body() dto: CreateStockAdjustmentDto) {
+    return this.inventoryService.adjustSupplyStock(id, dto);
   }
 }

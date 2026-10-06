@@ -2,11 +2,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  OneToMany,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { FabricStockEntry } from './fabric-stock-entry.entity';
+import { StockAdjustment } from './stock-adjustment.entity';
 
 @Entity('fabric_rolls')
 export class FabricRoll {
@@ -22,6 +24,15 @@ export class FabricRoll {
 
   @Column({ name: 'lot', type: 'varchar', length: 80 })
   lot!: string;
+
+  @Column({ name: 'original_quantity', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  originalQuantity!: string;
+
+  @Column({ name: 'current_quantity', type: 'numeric', precision: 12, scale: 2, default: 0 })
+  currentQuantity!: string;
+
+  @OneToMany(() => StockAdjustment, (adjustment) => adjustment.fabricRoll)
+  adjustments!: StockAdjustment[];
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
