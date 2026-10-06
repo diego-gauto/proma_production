@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
 import { Modal } from "../components/ui/Modal/Modal";
@@ -9,6 +10,7 @@ import { Table } from "../components/ui/Table/Table";
 import { isUnauthorizedError, login, LoginResponse } from "../lib/api/client";
 import {
   DashboardKanbanResponse,
+  DashboardKanbanPart,
   DashboardRow,
   DashboardSummary,
   getDashboardKanban,
@@ -86,8 +88,33 @@ const resources: {
   { key: "users", label: "Usuarios y permisos", singular: "Usuario", empty: "Sin usuarios cargados" },
 ];
 
+const resourceKeys = new Set<MasterName>(resources.map((resource) => resource.key));
+
+function pathForView(view: MainView, resource: MasterName): string {
+  if (view === "sectors") return "/sectores";
+  if (view === "masters") return `/gestion/${resource}`;
+  return "/ordenes";
+}
+
+function viewStateFromPath(pathname: string): { view: MainView; resource?: MasterName } {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments[0] === "sectores") {
+    return { view: "sectors" };
+  }
+  if (segments[0] === "gestion") {
+    const resource = segments[1] as MasterName | undefined;
+    return {
+      view: "masters",
+      resource: resource && resourceKeys.has(resource) ? resource : resources[0].key,
+    };
+  }
+  return { view: "orders" };
+}
+
 
 export default function Home() {
+  const pathname = usePathname();
+  const router = useRouter();
   const [session, setSession] = useState<LoginResponse | null>(null);
   const [mainView, setMainView] = useState<MainView>("orders");
   const [active, setActive] = useState<MasterName>("clients");
@@ -110,6 +137,7 @@ export default function Home() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [movingPartId, setMovingPartId] = useState<string | null>(null);
+  const [sectorDisplayMode, setSectorDisplayMode] = useState<"list" | "cards">("cards");
 
   const clearStoredSession = useCallback((message?: string) => {
     window.localStorage.removeItem("proma-session");
@@ -148,6 +176,21 @@ export default function Home() {
     () => resources.find((resource) => resource.key === active) ?? resources[0],
     [active],
   );
+
+  useEffect(() => {
+    const routeState = viewStateFromPath(pathname);
+    setMainView(routeState.view);
+    if (routeState.resource) {
+      setActive(routeState.resource);
+    }
+    setSearch("");
+    setError("");
+    setModalItem(null);
+  }, [pathname]);
+
+  const navigateToView = useCallback((view: MainView, resource: MasterName = active) => {
+    router.push(pathForView(view, resource));
+  }, [active, router]);
 
   const loadItems = useCallback(async (nextSearch = search, nextPage = itemsPage) => {
     if (!session) {
@@ -323,9 +366,7 @@ export default function Home() {
           className={styles.brandButton}
           type="button"
           onClick={() => {
-            setMainView("orders");
-            setSearch("");
-            setError("");
+            navigateToView("orders");
           }}
         >
           <span className={styles.brandMark} aria-hidden="true" />
@@ -336,9 +377,7 @@ export default function Home() {
             className={mainView === "orders" ? styles.navActive : ""}
             type="button"
             onClick={() => {
-              setMainView("orders");
-              setSearch("");
-              setError("");
+              navigateToView("orders");
             }}
           >
             <span className={`${styles.navIcon} ${styles.iconOrders}`} aria-hidden="true" />
@@ -348,9 +387,7 @@ export default function Home() {
             className={mainView === "sectors" ? styles.navActive : ""}
             type="button"
             onClick={() => {
-              setMainView("sectors");
-              setSearch("");
-              setError("");
+              navigateToView("sectors");
             }}
           >
             <span className={`${styles.navIcon} ${styles.iconSectors}`} aria-hidden="true" />
@@ -361,11 +398,7 @@ export default function Home() {
               className={mainView === "masters" ? styles.navActive : ""}
               type="button"
               onClick={() => {
-                setMainView("masters");
-                setItems([]);
-                setSearch("");
-                setError("");
-                setModalItem(null);
+                navigateToView("masters", active);
               }}
             >
               <span className={`${styles.navIcon} ${styles.iconManagement}`} aria-hidden="true" />
@@ -408,24 +441,6 @@ export default function Home() {
             onMarkRead={(id) => void handleMarkNotificationRead(id)}
             onMarkAllRead={() => void handleMarkAllNotificationsRead()}
           />
-          <Button
-            type="button"
-            onClick={() => {
-              if (mainView === "masters") {
-                setModalItem("new");
-              } else {
-                setIsOrderModalOpen(true);
-              }
-            }}
-          >
-            <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
-            {mainView === "masters" ? `Nuevo ${activeResource.singular}` : "Nueva orden"}
-          </Button>
-          {mainView === "masters" ? (
-            <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
-              Ingreso stock
-            </Button>
-          ) : null}
           <div className={styles.profileBox}>
             <button
               type="button"
@@ -454,26 +469,26 @@ export default function Home() {
             <p className={styles.breadcrumb}>Producción / {mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Vista general"} · {formatTodayLabel()}</p>
             <h1>{mainView === "masters" ? "Gestión" : mainView === "sectors" ? "Sectores" : "Órdenes de corte"}</h1>
           </div>
-          {mainView === "masters" ? null : (
+          {mainView === "sectors" ? (
             <div className={styles.viewToggle}>
               <button
                 type="button"
-                className={mainView === "orders" ? styles.toggleActive : ""}
-                onClick={() => setMainView("orders")}
+                className={sectorDisplayMode === "list" ? styles.toggleActive : ""}
+                onClick={() => setSectorDisplayMode("list")}
               >
                 <span className={`${styles.navIcon} ${styles.iconOrders}`} aria-hidden="true" />
                 Lista
               </button>
               <button
                 type="button"
-                className={mainView === "sectors" ? styles.toggleActive : ""}
-                onClick={() => setMainView("sectors")}
+                className={sectorDisplayMode === "cards" ? styles.toggleActive : ""}
+                onClick={() => setSectorDisplayMode("cards")}
               >
                 <span className={`${styles.navIcon} ${styles.iconSectors}`} aria-hidden="true" />
-                Sectores
+                Tarjetas
               </button>
             </div>
-          )}
+          ) : null}
         </header>
 
         {mainView === "masters" && visibleResources.length > 0 ? (
@@ -484,13 +499,10 @@ export default function Home() {
                 type="button"
                 className={resource.key === active ? styles.managementTabActive : ""}
                 onClick={() => {
-                  setActive(resource.key);
                   setItems([]);
                   setItemsTotal(0);
                   setItemsPage(1);
-                  setSearch("");
-                  setError("");
-                  setModalItem(null);
+                  navigateToView("masters", resource.key);
                 }}
               >
                 {resource.label}
@@ -552,6 +564,8 @@ export default function Home() {
             onOpen={setSelectedOrderId}
             onMove={(partId, stage) => void handleMovePart(partId, stage)}
             movingPartId={movingPartId}
+            sectorDisplayMode={sectorDisplayMode}
+            onNewOrder={() => setIsOrderModalOpen(true)}
           />
         ) : (
           <section className={styles.managementPanel}>
@@ -560,6 +574,15 @@ export default function Home() {
                 <p className={styles.catalogEyebrow}>Catálogo</p>
                 <h2>{activeResource.label}</h2>
                 <p>{itemsTotal} registros en esta vista</p>
+              </div>
+              <div className={styles.sectionActions}>
+                <Button type="button" onClick={() => setModalItem("new")}>
+                  <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
+                  {`Nuevo ${activeResource.singular}`}
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setIsStockModalOpen(true)}>
+                  Ingreso stock
+                </Button>
               </div>
             </header>
             <Table
@@ -633,6 +656,8 @@ function OrdersView({
   onOpen,
   onMove,
   movingPartId,
+  sectorDisplayMode,
+  onNewOrder,
 }: {
   mode: "orders" | "sectors";
   orders: DashboardRow[];
@@ -641,7 +666,11 @@ function OrdersView({
   onOpen: (orderId: string) => void;
   onMove: (partId: string, stage: StageOption) => void;
   movingPartId: string | null;
+  sectorDisplayMode: "list" | "cards";
+  onNewOrder: () => void;
 }) {
+  const [expandedSectors, setExpandedSectors] = useState<Record<number, boolean>>({});
+
   return (
     <div className={styles.dashboardStack}>
       <section className={styles.summaryGrid}>
@@ -657,6 +686,12 @@ function OrdersView({
             <h2>{mode === "orders" ? "Listado de órdenes" : "Órdenes por sector"}</h2>
             <p>{mode === "orders" ? `${orders.length} órdenes visibles · prioridades del día` : `${kanban.stages.length} sectores operativos`}</p>
           </div>
+          {mode === "orders" ? (
+            <Button type="button" onClick={onNewOrder}>
+              <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
+              Nueva orden
+            </Button>
+          ) : null}
         </header>
 
         {mode === "orders" ? (
@@ -721,6 +756,39 @@ function OrdersView({
               </tbody>
             </table>
           </div>
+        ) : sectorDisplayMode === "list" ? (
+          <section className={styles.sectorList}>
+            {kanban.stages.map((column) => {
+              const isExpanded = expandedSectors[column.stage.id] !== false;
+              return (
+                <article className={styles.sectorListGroup} key={column.stage.id}>
+                  <button
+                    type="button"
+                    className={styles.sectorListHeader}
+                    aria-expanded={isExpanded}
+                    onClick={() => {
+                      setExpandedSectors((current) => ({
+                        ...current,
+                        [column.stage.id]: !isExpanded,
+                      }));
+                    }}
+                  >
+                    <span className={isExpanded ? styles.collapseIconOpen : styles.collapseIconClosed} aria-hidden="true" />
+                    <strong>{column.stage.name}</strong>
+                    <small>{column.parts.length} {column.parts.length === 1 ? "orden" : "órdenes"}</small>
+                  </button>
+                  {isExpanded ? (
+                    <SectorOrdersTable
+                      stage={column.stage}
+                      parts={column.parts}
+                      movingPartId={movingPartId}
+                      onOpen={onOpen}
+                    />
+                  ) : null}
+                </article>
+              );
+            })}
+          </section>
         ) : (
           <section className={styles.kanbanBoard}>
             {kanban.stages.map((column) => (
@@ -774,6 +842,81 @@ function OrdersView({
           </section>
         )}
       </section>
+    </div>
+  );
+}
+
+
+function SectorOrdersTable({
+  stage,
+  parts,
+  movingPartId,
+  onOpen,
+}: {
+  stage: StageOption;
+  parts: DashboardKanbanPart[];
+  movingPartId: string | null;
+  onOpen: (orderId: string) => void;
+}) {
+  const contextLabel = sectorContextLabel(stage.code);
+  return (
+    <div className={styles.sectorOrdersTableWrap}>
+      <table className={`${styles.ordersTable} ${styles.sectorOrdersTable}`}>
+        <colgroup>
+          <col className={styles.colOrderCode} />
+          <col className={styles.colQuantity} />
+          <col className={styles.colSectorContext} />
+          <col className={styles.colSectorIngress} />
+          <col className={styles.colSectorDays} />
+          <col className={styles.colEstimated} />
+          <col className={styles.colStatus} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Orden / Cliente / Producto</th>
+            <th>Cantidad</th>
+            <th>{contextLabel}</th>
+            <th>Ingreso</th>
+            <th>Días</th>
+            <th>Estimado</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {parts.length === 0 ? (
+            <tr>
+              <td colSpan={7} className={styles.emptyState}>
+                Sin órdenes
+              </td>
+            </tr>
+          ) : (
+            parts.map((part) => (
+              <tr
+                key={part.id}
+                className={part.id === movingPartId ? styles.sectorListMovingRow : ""}
+                onClick={() => part.order?.id && onOpen(part.order.id)}
+                tabIndex={part.order?.id ? 0 : -1}
+              >
+                <td>
+                  <span className={styles.orderCode}>{part.order?.externalCode ?? part.order?.internalCode ?? part.partCode}</span>
+                  <span className={styles.orderMeta}>{part.order?.client?.businessName ?? "Cliente"}</span>
+                  <span className={styles.orderProduct}>{part.order?.article?.name ?? part.partCode}</span>
+                </td>
+                <td>{part.quantity} u</td>
+                <td>{sectorContextValue(stage.code, part)}</td>
+                <td>{partStartedAt(part) ? formatDate(partStartedAt(part) as string) : "Sin ingreso"}</td>
+                <td>{partStartedAt(part) ? `${daysSince(partStartedAt(part) as string)} d` : "-"}</td>
+                <td>{partEstimatedFinish(part) ? formatDate(partEstimatedFinish(part) as string) : "Sin fecha"}</td>
+                <td>
+                  <span className={`${styles.statusPill} ${styles.statusGreen}`}>
+                    {part.id === movingPartId ? "Moviendo" : partStatusText(part.status)}
+                  </span>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -896,6 +1039,107 @@ function statusText(row: DashboardRow): string {
   if (row.semaphore === "FINALIZED") return "Finalizada";
   if (row.orderStatus === "EN_ARREGLO") return "Arreglo";
   return "A tiempo";
+}
+
+function partStatusText(status: string): string {
+  if (status === "EN_PROCESO") return "En proceso";
+  if (status === "PENDIENTE") return "Pendiente";
+  if (status === "FINALIZADA") return "Finalizada";
+  if (status === "DIVIDIDA") return "Dividida";
+  if (status === "REINTEGRADA") return "Reintegrada";
+  return status;
+}
+
+function partEstimatedFinish(part: DashboardKanbanPart): string | null {
+  return activePartEvent(part)?.estimatedFinishAt ?? null;
+}
+
+function partStartedAt(part: DashboardKanbanPart): string | null {
+  return activePartEvent(part)?.startedAt ?? null;
+}
+
+function activePartEvent(part: DashboardKanbanPart): NonNullable<DashboardKanbanPart["events"]>[number] | null {
+  return part.events?.find((event) => !event.finishedAt) ?? null;
+}
+
+function sectorContextLabel(stageCode: string): string {
+  const labels: Record<string, string> = {
+    CORTE: "Tela",
+    BORDADO: "Parte a bordar",
+    ESTAMPADO: "Parte a estampar",
+    AVIOS_CONFECCION: "Avíos",
+    CONFECCION: "Taller",
+    ATRAQUE: "Detalle",
+    OJAL_BOTON: "Ojal y botón",
+    AVIOS_TERMINACION: "Detalle",
+    PLANCHA: "Plancha",
+    TERMINACION: "Terminación",
+  };
+  return labels[stageCode] ?? "Detalle";
+}
+
+function sectorContextValue(stageCode: string, part: DashboardKanbanPart): string {
+  const event = activePartEvent(part);
+  if (stageCode === "CORTE") {
+    return part.order?.fabric?.name ?? "Sin tela";
+  }
+  if (stageCode === "BORDADO" || stageCode === "ESTAMPADO") {
+    return decorationContext(part, stageCode === "BORDADO" ? "BORDADO" : "ESTAMPADO");
+  }
+  if (stageCode === "AVIOS_CONFECCION") {
+    return suppliesContext(part, "CONFECCION") || "Avíos de confección";
+  }
+  if (stageCode === "CONFECCION") {
+    return event?.workshop?.name ?? "Interna";
+  }
+  if (stageCode === "ATRAQUE") {
+    return "Sin detalle";
+  }
+  if (stageCode === "OJAL_BOTON") {
+    const base = event?.note || "Ojal y botón según artículo";
+    return event?.workshop?.name ? `${base} · ${event.workshop.name}` : base;
+  }
+  if (stageCode === "AVIOS_TERMINACION") {
+    return "Sin detalle";
+  }
+  if (stageCode === "PLANCHA") {
+    if (event?.executionType === "EXTERNO") {
+      return event.workshop?.name ?? "Taller externo";
+    }
+    if (event?.executionType === "INTERNO") {
+      return "Interna";
+    }
+    return "No lleva";
+  }
+  if (stageCode === "TERMINACION") {
+    return suppliesContext(part, "TERMINACION") || "Embolsado final / etiquetado";
+  }
+  return event?.note || "Sin detalle";
+}
+
+function decorationContext(part: DashboardKanbanPart, decorationType: string): string {
+  if (part.splitReason) {
+    return part.splitReason;
+  }
+  const parts = part.order?.article?.decorationParts
+    ?.filter((decorationPart) => decorationPart.decorationType === decorationType)
+    .map((decorationPart) => decorationPart.garmentPart)
+    .filter(Boolean);
+  return parts && parts.length > 0 ? parts.join(", ") : "Parte a definir";
+}
+
+function suppliesContext(part: DashboardKanbanPart, category: string): string {
+  const supplies = part.supplies
+    ?.filter((entry) => !entry.supply?.category || entry.supply.category === category)
+    .map((entry) => {
+      const name = entry.supply?.name ?? entry.supply?.code;
+      if (!name) {
+        return "";
+      }
+      return entry.quantityNeeded ? `${name} x ${entry.quantityNeeded}` : name;
+    })
+    .filter(Boolean);
+  return supplies && supplies.length > 0 ? supplies.join(", ") : "";
 }
 
 function userInitials(value: string): string {
