@@ -10,7 +10,7 @@ import {
   StageExecutionType,
   SupplyCategory,
 } from '../../modules/catalog/entities/catalog.enums';
-import { OrderStatus, PartStatus } from '../../modules/orders/entities/order.enums';
+import { OrderStatus, PartSplitMode, PartStatus } from '../../modules/orders/entities/order.enums';
 import { PermissionAction, UserRole } from '../../modules/users/entities/user.enums';
 
 type IdRow = { id: string };
@@ -42,6 +42,14 @@ type DemoData = {
     workshopName?: string;
     estimatedDaysOffset?: number;
     finalized?: boolean;
+    splitParts?: {
+      partCode: string;
+      quantity: number;
+      stageCode: SectorCode;
+      executionType: StageExecutionType;
+      workshopName?: string;
+      estimatedDaysOffset?: number;
+    }[];
   }[];
 };
 
@@ -135,6 +143,10 @@ export async function seedDemoData(dataSource: DataSource): Promise<void> {
         workshopId: order.workshopName ? requireDemoId(workshops, order.workshopName, 'workshop') : undefined,
         estimatedDaysOffset: order.estimatedDaysOffset,
         finalized: order.finalized,
+        splitParts: order.splitParts?.map((part) => ({
+          ...part,
+          workshopId: part.workshopName ? requireDemoId(workshops, part.workshopName, 'workshop') : undefined,
+        })),
       });
     }
   });
@@ -343,6 +355,14 @@ async function ensureOrder(
     workshopId?: string;
     estimatedDaysOffset?: number;
     finalized?: boolean;
+    splitParts?: {
+      partCode: string;
+      quantity: number;
+      stageCode: SectorCode;
+      executionType: StageExecutionType;
+      workshopId?: string;
+      estimatedDaysOffset?: number;
+    }[];
   },
 ): Promise<void> {
   const existing = await manager.query('SELECT id FROM orders WHERE external_code = $1', [input.externalCode]);
@@ -389,23 +409,45 @@ async function ensureOrder(
     `,
     [orderId, input.fabricId, input.sizeValueId, input.quantity, input.partStatus, stage?.id ?? null],
   );
-  if (stage) {
+  if (input.splitParts?.length) {
     await manager.query(
-      `
-        INSERT INTO part_stage_events (
+      `UPDATE order_parts
+        SET status = $2, is_split = true, split_mode = $3, current_stage_id = NULL
+        WHERE id = $1`,
+      [partRows[0].id, PartStatus.DIVIDIDA, PartSplitMode.LOTE],
+    );
+
+    for (const branch of input.splitParts) {
+      const branchStage = (await manager.query('SELECT id FROM stages WHERE code = $1', [branch.stageCode]))[0] as NumericIdRow;
+      const branchRows = await manager.query(
+        `INSERT INTO order_parts (
+          order_id, parent_part_id, part_code, fabric_id, size_curve_value_id,
+          quantity, status, current_stage_id, split_mode, split_reason
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id`,
+        [orderId, partRows[0].id, branch.partCode, input.fabricId, input.sizeValueId, branch.quantity, PartStatus.EN_PROCESO, branchStage.id, PartSplitMode.LOTE, branch.partCode.endsWith('-A') ? 'Taller San Martin' : 'Taller Lanus'],
+      );
+      await manager.query(
+        `INSERT INTO part_stage_events (
           order_part_id, stage_id, execution_type, workshop_id, started_at,
           estimated_finish_at, finished_at, performed_by
         )
-        VALUES ($1, $2, $3, $4, now() - interval '2 days', now() + ($5::int * interval '1 day'), NULL, $6)
-      `,
-      [
-        partRows[0].id,
-        stage.id,
-        input.executionType ?? StageExecutionType.INTERNO,
-        input.workshopId ?? null,
-        input.estimatedDaysOffset ?? 2,
-        input.createdById,
-      ],
+        VALUES ($1, $2, $3, $4, now() - interval '2 days', now() + ($5::int * interval '1 day'), NULL, $6)`,
+        [branchRows[0].id, branchStage.id, branch.executionType, branch.workshopId ?? null, branch.estimatedDaysOffset ?? 2, input.createdById],
+      );
+    }
+    return;
+  }
+
+  if (stage) {
+    await manager.query(
+      `INSERT INTO part_stage_events (
+        order_part_id, stage_id, execution_type, workshop_id, started_at,
+        estimated_finish_at, finished_at, performed_by
+      )
+      VALUES ($1, $2, $3, $4, now() - interval '2 days', now() + ($5::int * interval '1 day'), NULL, $6)`,
+      [partRows[0].id, stage.id, input.executionType ?? StageExecutionType.INTERNO, input.workshopId ?? null, input.estimatedDaysOffset ?? 2, input.createdById],
     );
   }
 }

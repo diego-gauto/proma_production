@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../components/ui/Button/Button";
 import { Input } from "../components/ui/Input/Input";
@@ -55,19 +55,8 @@ import {
 } from "../lib/api/inventory.api";
 import {
   createOrder,
-  finishStage,
-  getOrder,
-  listStages,
-  markOrderRepair,
   movePartToStage,
-  OrderSummary,
-  PartNode,
-  recombineParts,
-  resolveOrderRepair,
-  splitPart,
   StageOption,
-  startStage,
-  updatePartSupply,
 } from "../lib/api/orders.api";
 import { formatList } from "../lib/formatters/master-formatters";
 import styles from "./page.module.css";
@@ -153,7 +142,6 @@ export default function Home() {
   const [stockLimit] = useState(20);
   const [stockDetail, setStockDetail] = useState<FabricStockDetail | SupplyStockDetail | null>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -174,7 +162,6 @@ export default function Home() {
     setIsStockModalOpen(false);
     setStockDetail(null);
     setIsOrderModalOpen(false);
-    setSelectedOrderId(null);
     setNotifications([]);
     setUnreadCount(0);
     setIsNotificationsOpen(false);
@@ -631,7 +618,7 @@ export default function Home() {
             orders={orders}
             kanban={kanban}
             summary={summary}
-            onOpen={setSelectedOrderId}
+            onOpen={(orderCode) => router.push(`/ordenes/${encodeURIComponent(orderCode)}`)}
             onMove={(partId, stage) => void handleMovePart(partId, stage)}
             movingPartId={movingPartId}
             sectorDisplayMode={sectorDisplayMode}
@@ -698,16 +685,6 @@ export default function Home() {
           }}
         />
       ) : null}
-
-      {selectedOrderId ? (
-        <OrderDetailModal
-          orderId={selectedOrderId}
-          token={session.accessToken}
-          onClose={() => setSelectedOrderId(null)}
-          onChanged={() => void loadOrders()}
-        />
-      ) : null}
-
       {modalItem ? (
         <MasterModal
           resource={active}
@@ -786,9 +763,12 @@ function StockView({
     <section className={styles.managementPanel}>
       <header className={styles.sectionTitleRow}>
         <div>
-          <p className={styles.catalogEyebrow}>Inventario</p>
           <h2>{kind === "fabric" ? "Telas" : "Avíos"}</h2>
-          <p>{total} artículos con control de stock</p>
+          <p>
+            {kind === "fabric"
+              ? `${total} tipos de tela con stock por rollo`
+              : `${total} avíos con stock actual`}
+          </p>
         </div>
         <div className={styles.sectionActions}>
           <div className={styles.stockTypeSwitch} role="group" aria-label="Sector de stock">
@@ -811,23 +791,24 @@ function StockView({
           <table className={styles.ordersTable}>
             <thead>
               <tr>
-                <th>Tela</th>
+                <th>Artículo</th>
+                <th>Descripción</th>
                 <th>Color</th>
-                <th>Rollos</th>
-                <th>Original</th>
                 <th>Disponible</th>
               </tr>
             </thead>
             <tbody>
               {fabricRows.length === 0 ? (
-                <tr><td colSpan={5} className={styles.emptyState}>Sin telas para mostrar</td></tr>
+                <tr><td colSpan={4} className={styles.emptyState}>Sin telas para mostrar</td></tr>
               ) : fabricRows.map((row) => (
                 <tr key={row.fabric.id} onClick={() => onOpenFabric(row.fabric.id)} tabIndex={0}>
-                  <td><span className={styles.orderCode}>{row.fabric.code}</span><span className={styles.orderMeta}>{row.fabric.name}</span></td>
+                  <td><span className={styles.orderCode}>{row.fabric.code}</span></td>
+                  <td>{row.fabric.name}</td>
                   <td>{row.fabric.color ?? "Sin color"}</td>
-                  <td>{row.rollCount}</td>
-                  <td>{formatQuantity(row.originalQuantity)}</td>
-                  <td>{formatQuantity(row.currentQuantity)}</td>
+                  <td>
+                    <span className={styles.orderCode}>{formatQuantity(row.currentQuantity)}</span>
+                    <span className={styles.orderMeta}>{row.rollCount} {row.rollCount === 1 ? "rollo" : "rollos"}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -838,8 +819,8 @@ function StockView({
           <table className={styles.ordersTable}>
             <thead>
               <tr>
-                <th>Avío</th>
-                <th>Categoría</th>
+                <th>Artículo</th>
+                <th>Descripción</th>
                 <th>Color</th>
                 <th>Disponible</th>
               </tr>
@@ -849,10 +830,13 @@ function StockView({
                 <tr><td colSpan={4} className={styles.emptyState}>Sin avíos para mostrar</td></tr>
               ) : supplyRows.map((row) => (
                 <tr key={row.supply.id} onClick={() => onOpenSupply(row.supply.id)} tabIndex={0}>
-                  <td><span className={styles.orderCode}>{row.supply.code}</span><span className={styles.orderMeta}>{row.supply.name}</span></td>
-                  <td>{row.supply.category}</td>
+                  <td><span className={styles.orderCode}>{row.supply.code}</span></td>
+                  <td>
+                    {row.supply.name}
+                    <span className={styles.orderMeta}>{row.supply.category}</span>
+                  </td>
                   <td>{row.supply.color ?? "Sin color"}</td>
-                  <td>{formatQuantity(row.currentQuantity)}</td>
+                  <td><span className={styles.orderCode}>{formatQuantity(row.currentQuantity)}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -883,6 +867,7 @@ function StockDetailModal({
   const [reason, setReason] = useState<StockAdjustmentReason>("CORRECCION");
   const [note, setNote] = useState("");
   const [error, setError] = useState("");
+  const [expandedRollId, setExpandedRollId] = useState<string | null>(null);
   const isFabric = kind === "fabric" && "rolls" in detail;
   const supplyDetail = detail as SupplyStockDetail;
   const title = isFabric ? detail.fabric.name : supplyDetail.supply.name;
@@ -917,17 +902,71 @@ function StockDetailModal({
     <Modal title={title} onClose={onClose}>
       <div className={styles.detailPanel}>
         <section className={styles.orderSummaryGrid}>
+          <span><strong>Artículo</strong>{isFabric ? detail.fabric.code : supplyDetail.supply.code}</span>
+          <span><strong>Color</strong>{(isFabric ? detail.fabric.color : supplyDetail.supply.color) ?? "Sin color"}</span>
           <span><strong>Disponible</strong>{formatQuantity(detail.currentQuantity)}</span>
-          <span><strong>Tipo</strong>{isFabric ? "Tela" : "Avío"}</span>
-          <span><strong>Registros</strong>{isFabric ? detail.rollCount : supplyDetail.entries.length}</span>
-          <span><strong>Original</strong>{formatQuantity(isFabric ? detail.originalQuantity : detail.currentQuantity)}</span>
+          <span><strong>{isFabric ? "Rollos" : "Compras"}</strong>{isFabric ? detail.rollCount : supplyDetail.entries.length}</span>
         </section>
         <div className={styles.ordersTableWrap}>
           <table className={styles.ordersTable}>
             {isFabric ? (
               <>
-                <thead><tr><th>Rollo</th><th>Lote</th><th>Proveedor</th><th>Original</th><th>Disponible</th></tr></thead>
-                <tbody>{detail.rolls.map((roll) => <tr key={roll.id}><td>{roll.code}</td><td>{roll.lot}</td><td>{roll.providerName}</td><td>{formatQuantity(roll.originalQuantity)}</td><td>{formatQuantity(roll.currentQuantity)}</td></tr>)}</tbody>
+                <thead><tr><th>Rollo</th><th>Partida</th><th>Proveedor</th><th>Original</th><th>Actual</th></tr></thead>
+                <tbody>{detail.rolls.map((roll) => {
+                  const isExpanded = expandedRollId === roll.id;
+                  const useMovements = roll.movements.filter((movement) => movement.reason === "USO");
+                  return (
+                    <Fragment key={roll.id}>
+                      <tr
+                        onClick={() => setExpandedRollId(isExpanded ? null : roll.id)}
+                        tabIndex={0}
+                        aria-expanded={isExpanded}
+                      >
+                        <td>
+                          <span className={isExpanded ? styles.collapseIconOpen : styles.collapseIconClosed} aria-hidden="true" />
+                          {roll.code}
+                        </td>
+                        <td>{roll.lot}</td>
+                        <td>{roll.providerName}</td>
+                        <td>{formatQuantity(roll.originalQuantity)}</td>
+                        <td>{formatQuantity(roll.currentQuantity)}</td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className={styles.expandedDetailRow}>
+                          <td colSpan={5}>
+                            <div className={styles.rollUsagePanel}>
+                              <strong>Órdenes de corte donde se usó este rollo</strong>
+                              {useMovements.length === 0 ? (
+                                <p>No hay usos cargados para este rollo.</p>
+                              ) : (
+                                <table className={styles.nestedTable}>
+                                  <thead>
+                                    <tr>
+                                      <th>Orden</th>
+                                      <th>Cliente</th>
+                                      <th>Producto</th>
+                                      <th>Usado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {useMovements.map((movement) => (
+                                      <tr key={movement.id}>
+                                        <td>{movement.note || "Uso manual"}</td>
+                                        <td>Sin vincular</td>
+                                        <td>Sin vincular</td>
+                                        <td>{formatQuantity(Math.abs(movement.quantityDelta))}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}</tbody>
               </>
             ) : (
               <>
@@ -937,14 +976,16 @@ function StockDetailModal({
             )}
           </table>
         </div>
-        <form className={styles.actionPanel} onSubmit={handleAdjustment}>
-          <h2>Ajuste / uso manual</h2>
-          {isFabric ? <Select label="Rollo" value={targetId} onChange={(event) => setTargetId(event.target.value)} options={detail.rolls.map((roll) => ({ value: roll.id, label: roll.code + " - queda " + formatQuantity(roll.currentQuantity) }))} /> : null}
-          <Input label="Cantidad +/-" type="number" step="0.01" value={quantityDelta} onChange={(event) => setQuantityDelta(event.target.value)} required />
-          <Select label="Motivo" value={reason} onChange={(event) => setReason(event.target.value as StockAdjustmentReason)} options={["CORRECCION", "USO", "ROTURA", "DEVOLUCION"].map((value) => ({ value, label: value }))} />
-          <Input label="Nota" value={note} onChange={(event) => setNote(event.target.value)} />
-          <Button type="submit">Guardar ajuste</Button>
-        </form>
+        {isFabric ? (
+          <form className={styles.actionPanel} onSubmit={handleAdjustment}>
+            <h2>Ajuste / uso manual</h2>
+            <Select label="Rollo" value={targetId} onChange={(event) => setTargetId(event.target.value)} options={detail.rolls.map((roll) => ({ value: roll.id, label: roll.code + " - queda " + formatQuantity(roll.currentQuantity) }))} />
+            <Input label="Cantidad +/-" type="number" step="0.01" value={quantityDelta} onChange={(event) => setQuantityDelta(event.target.value)} required />
+            <Select label="Motivo" value={reason} onChange={(event) => setReason(event.target.value as StockAdjustmentReason)} options={["CORRECCION", "USO", "ROTURA", "DEVOLUCION"].map((value) => ({ value, label: value }))} />
+            <Input label="Nota" value={note} onChange={(event) => setNote(event.target.value)} />
+            <Button type="submit">Guardar ajuste</Button>
+          </form>
+        ) : null}
         {error ? <p className={styles.error}>{error}</p> : null}
       </div>
     </Modal>
@@ -970,7 +1011,7 @@ function OrdersView({
   orders: DashboardRow[];
   kanban: DashboardKanbanResponse;
   summary: DashboardSummary | null;
-  onOpen: (orderId: string) => void;
+  onOpen: (orderCode: string) => void;
   onMove: (partId: string, stage: StageOption) => void;
   movingPartId: string | null;
   sectorDisplayMode: "list" | "cards";
@@ -1037,7 +1078,7 @@ function OrdersView({
                   </tr>
                 ) : (
                   orders.map((row) => (
-                    <tr key={row.partId} className={rowClassName(row.rowType)} onClick={() => onOpen(row.orderId)} tabIndex={0}>
+                    <tr key={row.partId} className={rowClassName(row.rowType)} onClick={() => onOpen(row.externalCode || row.internalCode || row.orderId)} tabIndex={0}>
                       <td>
                         <span className={styles.orderCode}>{rowCode(row)}</span>
                         <span className={styles.orderMeta}>{row.clientName}</span>
@@ -1128,7 +1169,7 @@ function OrdersView({
                       className={part.id === movingPartId ? styles.kanbanCardMoving : ""}
                       draggable={part.id !== movingPartId}
                       disabled={part.id === movingPartId}
-                      onClick={() => part.order?.id && onOpen(part.order.id)}
+                      onClick={() => part.order && onOpen(part.order.externalCode || part.order.internalCode || part.order.id)}
                       onDragStart={(event) => {
                         event.dataTransfer.effectAllowed = "move";
                         event.dataTransfer.setData("text/plain", part.id);
@@ -1163,7 +1204,7 @@ function SectorOrdersTable({
   stage: StageOption;
   parts: DashboardKanbanPart[];
   movingPartId: string | null;
-  onOpen: (orderId: string) => void;
+  onOpen: (orderCode: string) => void;
 }) {
   const contextLabel = sectorContextLabel(stage.code);
   return (
@@ -1201,7 +1242,7 @@ function SectorOrdersTable({
               <tr
                 key={part.id}
                 className={part.id === movingPartId ? styles.sectorListMovingRow : ""}
-                onClick={() => part.order?.id && onOpen(part.order.id)}
+                onClick={() => part.order && onOpen(part.order.externalCode || part.order.internalCode || part.order.id)}
                 tabIndex={part.order?.id ? 0 : -1}
               >
                 <td>
@@ -1472,10 +1513,6 @@ function semaphoreTone(value: DashboardRow["semaphore"]): "Red" | "Yellow" | "Gr
   return "Green";
 }
 
-function partIsHistorical(status: string): boolean {
-  return status === "DIVIDIDA" || status === "REINTEGRADA";
-}
-
 function daysSince(value: string): number {
   const created = new Date(value).getTime();
   if (Number.isNaN(created)) {
@@ -1716,308 +1753,6 @@ function OrderModal({
       </form>
     </Modal>
   );
-}
-
-function OrderDetailModal({
-  orderId,
-  token,
-  onClose,
-  onChanged,
-}: {
-  orderId: string;
-  token: string;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const [order, setOrder] = useState<OrderSummary | null>(null);
-  const [error, setError] = useState("");
-  const [splitPartId, setSplitPartId] = useState("");
-  const [splitMode, setSplitMode] = useState<"LOTE" | "COMPONENTE">("LOTE");
-  const [splitRows, setSplitRows] = useState("5|Lote A\n5|Lote B");
-  const [componentIds, setComponentIds] = useState("");
-  const [recombineQuantity, setRecombineQuantity] = useState("1");
-  const [stages, setStages] = useState<StageOption[]>([]);
-  const [workshops, setWorkshops] = useState<WorkshopMaster[]>([]);
-  const [stagePartId, setStagePartId] = useState("");
-  const [stageId, setStageId] = useState("");
-  const [executionType, setExecutionType] = useState<"INTERNO" | "EXTERNO">("INTERNO");
-  const [stageWorkshopId, setStageWorkshopId] = useState("");
-  const [estimatedFinishAt, setEstimatedFinishAt] = useState("");
-  const [stageNote, setStageNote] = useState("");
-  const [finishIncludesAtraque, setFinishIncludesAtraque] = useState(false);
-  const [supplyPartId, setSupplyPartId] = useState("");
-  const [supplyId, setSupplyId] = useState("");
-  const [supplyCompleteness, setSupplyCompleteness] = useState("FALTANTE");
-  const [supplyQuantity, setSupplyQuantity] = useState("");
-  const [supplyNote, setSupplyNote] = useState("");
-  const [repairNote, setRepairNote] = useState("");
-
-  const loadOrder = useCallback(async () => {
-    setError("");
-    try {
-      const detail = await getOrder(token, orderId);
-      setOrder(detail);
-      const activePart = firstActivePart(detail.parts);
-      setSplitPartId((current) => current || activePart?.id || "");
-      setStagePartId((current) => current || activePart?.id || "");
-      setSupplyPartId((current) => current || activePart?.id || "");
-      const firstSupply = activePart?.supplies?.[0];
-      setSupplyId((current) => current || firstSupply?.supply?.id || "");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo cargar la orden");
-    }
-  }, [orderId, token]);
-
-  useEffect(() => {
-    void loadOrder();
-  }, [loadOrder]);
-
-  useEffect(() => {
-    async function loadOperationOptions() {
-      const [stageList, workshopList] = await Promise.all([
-        listStages(token),
-        listMasters<WorkshopMaster>("workshops", token, ""),
-      ]);
-      setStages(stageList);
-      setWorkshops(workshopList.items);
-      setStageId((current) => current || String(stageList[0]?.id ?? ""));
-      setStageWorkshopId((current) => current || workshopList.items[0]?.id || "");
-    }
-
-    void loadOperationOptions().catch((err) => {
-      setError(err instanceof Error ? err.message : "No se pudieron cargar opciones de etapa");
-    });
-  }, [token]);
-
-  async function handleSplit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    const subParts = splitRows
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [quantity, splitReason] = line.split("|").map((part) => part.trim());
-        return { quantity: Number(quantity), splitReason };
-      })
-      .filter((part) => part.quantity > 0);
-    try {
-      await splitPart(token, splitPartId, { splitMode, subParts });
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo dividir la parte");
-    }
-  }
-
-  async function handleRecombine(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      await recombineParts(token, {
-        componentPartIds: componentIds.split(",").map((id) => id.trim()).filter(Boolean),
-        quantity: Number(recombineQuantity),
-      });
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo reunificar");
-    }
-  }
-
-
-
-  async function handleStartStage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      await startStage(token, stagePartId, {
-        stageId: Number(stageId),
-        executionType,
-        workshopId: executionType === "EXTERNO" ? stageWorkshopId : undefined,
-        estimatedFinishAt: estimatedFinishAt ? new Date(estimatedFinishAt).toISOString() : undefined,
-        note: stageNote || undefined,
-      });
-      setStageNote("");
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo iniciar la etapa");
-    }
-  }
-
-  async function handleFinishStage(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      await finishStage(token, stagePartId, {
-        note: stageNote || undefined,
-        includesAtraque: finishIncludesAtraque,
-      });
-      setStageNote("");
-      setFinishIncludesAtraque(false);
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo finalizar la etapa");
-    }
-  }
-
-  async function handleSupplyUpdate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      await updatePartSupply(token, supplyPartId, supplyId, {
-        completeness: supplyCompleteness,
-        quantityAvailable: supplyQuantity ? Number(supplyQuantity) : undefined,
-        note: supplyNote || undefined,
-      });
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo actualizar el avio");
-    }
-  }
-
-  async function handleRepair(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError("");
-    try {
-      if (!order) {
-        return;
-      }
-      await markOrderRepair(token, order.id, repairNote);
-      setRepairNote("");
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo marcar arreglo");
-    }
-  }
-
-  async function handleResolveRepair() {
-    setError("");
-    try {
-      if (!order) {
-        return;
-      }
-      await resolveOrderRepair(token, order.id);
-      await loadOrder();
-      onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo resolver arreglo");
-    }
-  }
-
-  return (
-    <Modal title={order ? `${order.internalCode} / ${order.externalCode}` : "Orden"} onClose={onClose}>
-      {order ? (
-        <div className={styles.detailPanel}>
-          <section className={styles.orderSummaryGrid}>
-            <span><strong>Cliente</strong>{order.client.businessName}</span>
-            <span><strong>Articulo</strong>{order.article.name}</span>
-            <span><strong>Tela</strong>{order.fabric?.name ?? "Sin tela"}</span>
-            <span><strong>Curva</strong>{order.sizeCurve?.name ?? "Sin curva"}</span>
-          </section>
-          <section>
-            <h2>Partes</h2>
-            <div className={styles.partTree}>{buildPartForest(order.parts).map((part) => <PartTreeItem key={part.id} part={part} />)}</div>
-          </section>
-          <form className={styles.actionPanel} onSubmit={handleStartStage}>
-            <h2>Operar etapa</h2>
-            <div className={styles.compactGrid}>
-              <Select label="Parte" value={stagePartId} onChange={(event) => setStagePartId(event.target.value)} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
-              <Select label="Etapa" value={stageId} onChange={(event) => setStageId(event.target.value)} options={stages.map((stage) => ({ label: stage.name, value: String(stage.id) }))} />
-              <Select label="Ejecucion" value={executionType} onChange={(event) => setExecutionType(event.target.value as "INTERNO" | "EXTERNO")} options={[{ label: "Interna", value: "INTERNO" }, { label: "Externa", value: "EXTERNO" }]} />
-              {executionType === "EXTERNO" ? <Select label="Taller" value={stageWorkshopId} onChange={(event) => setStageWorkshopId(event.target.value)} options={workshops.map((workshop) => ({ label: workshop.name, value: workshop.id }))} /> : null}
-              <Input label="Fecha estimada" type="datetime-local" value={estimatedFinishAt} onChange={(event) => setEstimatedFinishAt(event.target.value)} />
-              <Input label="Nota" value={stageNote} onChange={(event) => setStageNote(event.target.value)} />
-            </div>
-            <label className={styles.checkboxLine}>
-              <input type="checkbox" checked={finishIncludesAtraque} onChange={(event) => setFinishIncludesAtraque(event.target.checked)} />
-              Atraque incluido en confeccion externa
-            </label>
-            <div className={styles.formActions}>
-              <Button type="submit">Iniciar etapa</Button>
-              <Button type="button" variant="secondary" onClick={(event) => void handleFinishStage(event as unknown as FormEvent<HTMLFormElement>)}>Finalizar etapa</Button>
-            </div>
-          </form>
-          <form className={styles.actionPanel} onSubmit={handleSupplyUpdate}>
-            <h2>Avios de la parte</h2>
-            <div className={styles.compactGrid}>
-              <Select label="Parte" value={supplyPartId} onChange={(event) => {
-                setSupplyPartId(event.target.value);
-                const nextPart = order.parts.find((part) => part.id === event.target.value);
-                setSupplyId(nextPart?.supplies?.[0]?.supply?.id ?? "");
-              }} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
-              <Select label="Avio" value={supplyId} onChange={(event) => setSupplyId(event.target.value)} options={(order.parts.find((part) => part.id === supplyPartId)?.supplies ?? []).map((supply) => ({ label: supply.supply?.name ?? supply.id, value: supply.supply?.id ?? supply.id }))} />
-              <Select label="Estado" value={supplyCompleteness} onChange={(event) => setSupplyCompleteness(event.target.value)} options={[{ label: "Faltante", value: "FALTANTE" }, { label: "Parcial", value: "PARCIAL" }, { label: "Completo", value: "COMPLETO" }]} />
-              <Input label="Cantidad disponible" type="number" min="0" value={supplyQuantity} onChange={(event) => setSupplyQuantity(event.target.value)} />
-              <Input label="Nota" value={supplyNote} onChange={(event) => setSupplyNote(event.target.value)} />
-            </div>
-            <Button type="submit" variant="secondary">Actualizar avios</Button>
-          </form>
-          <form className={styles.actionPanel} onSubmit={handleRepair}>
-            <h2>Arreglo</h2>
-            <Input label="Nota de arreglo" value={repairNote} onChange={(event) => setRepairNote(event.target.value)} />
-            <div className={styles.formActions}>
-              <Button type="submit" variant="danger">Marcar arreglo</Button>
-              <Button type="button" variant="secondary" onClick={() => void handleResolveRepair()}>Resolver arreglo</Button>
-            </div>
-          </form>
-          <form className={styles.actionPanel} onSubmit={handleSplit}>
-            <h2>Dividir parte</h2>
-            <Select label="Parte" value={splitPartId} onChange={(event) => setSplitPartId(event.target.value)} options={order.parts.filter((part) => !partIsHistorical(part.status)).map((part) => ({ label: `${part.partCode} - ${part.quantity} u.`, value: part.id }))} />
-            <Select label="Modo" value={splitMode} onChange={(event) => setSplitMode(event.target.value as "LOTE" | "COMPONENTE")} options={[{ label: "Lote", value: "LOTE" }, { label: "Componente", value: "COMPONENTE" }]} />
-            <label className={styles.textAreaLabel}>Ramas: cantidad|motivo<textarea value={splitRows} onChange={(event) => setSplitRows(event.target.value)} /></label>
-            <Button type="submit">Dividir</Button>
-          </form>
-          <form className={styles.actionPanel} onSubmit={handleRecombine}>
-            <h2>Reunificar componentes</h2>
-            <Input label="IDs de ramas componente" value={componentIds} onChange={(event) => setComponentIds(event.target.value)} placeholder="id-1, id-2" />
-            <Input label="Cantidad reunificada" type="number" min="1" value={recombineQuantity} onChange={(event) => setRecombineQuantity(event.target.value)} />
-            <Button type="submit" variant="secondary">Reunificar</Button>
-          </form>
-        </div>
-      ) : (
-        <p className={styles.status}>Cargando detalle...</p>
-      )}
-      {error ? <p className={styles.error}>{error}</p> : null}
-    </Modal>
-  );
-}
-
-function PartTreeItem({ part }: { part: PartNode }) {
-  return (
-    <div className={styles.partNode}>
-      <div>
-        <strong>{part.partCode}</strong>
-        <span>{part.quantity} u. / {part.status}{part.isComponentBranch ? " / componente" : ""}</span>
-        {part.splitReason ? <small>{part.splitReason}</small> : null}
-        {part.supplies?.length ? <small>Avios: {formatList(part.supplies, (supply) => supply.supply?.name ?? supply.id)}</small> : null}
-      </div>
-      {part.children?.length ? (
-        <div className={styles.partChildren}>{part.children.map((child) => <PartTreeItem key={child.id} part={child} />)}</div>
-      ) : null}
-    </div>
-  );
-}
-
-function firstActivePart(parts: PartNode[]): PartNode | null {
-  return parts.find((part) => !partIsHistorical(part.status)) ?? parts[0] ?? null;
-}
-
-function buildPartForest(parts: PartNode[]): PartNode[] {
-  const map = new Map(parts.map((part) => [part.id, { ...part, children: [] as PartNode[] }]));
-  const roots: PartNode[] = [];
-  map.forEach((part) => {
-    if (part.parentPartId && map.has(part.parentPartId)) {
-      map.get(part.parentPartId)?.children?.push(part);
-    } else {
-      roots.push(part);
-    }
-  });
-  return roots;
 }
 
 function buildColumns(resource: MasterName) {
