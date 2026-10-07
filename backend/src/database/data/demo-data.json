@@ -1,39 +1,118 @@
 {
   "password": "Demo-Proma-123",
   "users": [
-    { "fullName": "Admin Demo", "email": "admin@demo.proma.local", "role": "ADMIN", "permissions": [] },
-    { "fullName": "Produccion Demo", "email": "produccion@demo.proma.local", "role": "USER", "permissions": [
-      { "sectorCode": null, "action": "VER" },
-      { "sectorCode": null, "action": "CREAR" },
-      { "sectorCode": null, "action": "EDITAR" },
-      { "sectorCode": null, "action": "FORZAR_CAMBIO" }
-    ] }
+    {
+      "fullName": "Admin Demo",
+      "email": "admin@demo.proma.local",
+      "role": "ADMIN",
+      "permissions": []
+    },
+    {
+      "fullName": "Produccion Demo",
+      "email": "produccion@demo.proma.local",
+      "role": "USER",
+      "permissions": [
+        {
+          "sectorCode": null,
+          "action": "VER"
+        },
+        {
+          "sectorCode": null,
+          "action": "CREAR"
+        },
+        {
+          "sectorCode": null,
+          "action": "EDITAR"
+        },
+        {
+          "sectorCode": null,
+          "action": "FORZAR_CAMBIO"
+        }
+      ]
+    }
   ],
   "clients": [
-    { "businessName": "Demo Metalurgica Norte", "taxId": "DEMO-CLIENTE-1" },
-    { "businessName": "Demo Servicios Sur", "taxId": "DEMO-CLIENTE-2" }
+    {
+      "businessName": "Demo Metalurgica Norte",
+      "taxId": "DEMO-CLIENTE-1"
+    },
+    {
+      "businessName": "Demo Servicios Sur",
+      "taxId": "DEMO-CLIENTE-2"
+    }
   ],
   "workshops": [
-    { "name": "Demo Taller Confeccion", "specialties": ["CONFECCION"] },
-    { "name": "Demo Ojal y Boton", "specialties": ["OJAL_BOTON"] },
-    { "name": "Demo Plancha Externa", "specialties": ["PLANCHA"] }
+    {
+      "name": "Demo Taller Confeccion",
+      "specialties": [
+        "CONFECCION"
+      ]
+    },
+    {
+      "name": "Demo Ojal y Boton",
+      "specialties": [
+        "OJAL_BOTON"
+      ]
+    },
+    {
+      "name": "Demo Plancha Externa",
+      "specialties": [
+        "PLANCHA"
+      ]
+    },
+    {
+      "name": "Demo Taller San Martin",
+      "specialties": [
+        "CONFECCION"
+      ]
+    },
+    {
+      "name": "Demo Taller Lanus",
+      "specialties": [
+        "CONFECCION"
+      ]
+    }
   ],
   "fabrics": [
-    { "code": "DEMO-TELA-GABARDINA", "name": "Gabardina azul demo" },
-    { "code": "DEMO-TELA-RIPSTOP", "name": "Ripstop gris demo" }
+    {
+      "code": "DEMO-TELA-GABARDINA",
+      "name": "Gabardina azul demo"
+    },
+    {
+      "code": "DEMO-TELA-RIPSTOP",
+      "name": "Ripstop gris demo"
+    }
   ],
   "supplies": [
-    { "code": "DEMO-AVIO-CIERRE", "name": "Cierre reforzado", "category": "CONFECCION" },
-    { "code": "DEMO-AVIO-BOTON", "name": "Boton metalico", "category": "TERMINACION" }
+    {
+      "code": "DEMO-AVIO-CIERRE",
+      "name": "Cierre reforzado",
+      "category": "CONFECCION"
+    },
+    {
+      "code": "DEMO-AVIO-BOTON",
+      "name": "Boton metalico",
+      "category": "TERMINACION"
+    }
   ],
   "sizeCurve": {
     "name": "Demo Alfanumerica",
     "sequenceType": "ALFABETICA",
-    "values": ["S", "M", "L"]
+    "values": [
+      "S",
+      "M",
+      "L"
+    ]
   },
   "articles": [
-    { "code": "DEMO-ART-CAMPERA", "name": "Campera demo" },
-    { "code": "DEMO-ART-PANTALON", "name": "Pantalon demo" }
+    {
+      "code": "DEMO-ART-CAMPERA",
+      "name": "Campera demo"
+    },
+    {
+      "code": "DEMO-ART-PANTALON",
+      "name": "Pantalon demo"
+    }
   ],
   "orders": [
     {
@@ -98,6 +177,34 @@
       "orderStatus": "FINALIZADA",
       "partStatus": "FINALIZADA",
       "finalized": true
+    },
+    {
+      "externalCode": "DEMO-ORDEN-006",
+      "internalCode": "DEMO-OC-006",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "M",
+      "quantity": 180,
+      "partStatus": "EN_PROCESO",
+      "splitParts": [
+        {
+          "partCode": "P1-A",
+          "quantity": 100,
+          "stageCode": "CONFECCION",
+          "executionType": "EXTERNO",
+          "workshopName": "Demo Taller San Martin",
+          "estimatedDaysOffset": 2
+        },
+        {
+          "partCode": "P1-B",
+          "quantity": 80,
+          "stageCode": "CONFECCION",
+          "executionType": "EXTERNO",
+          "workshopName": "Demo Taller Lanus",
+          "estimatedDaysOffset": 2
+        }
+      ]
     }
   ]
 }
