@@ -3,6 +3,7 @@
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../components/ui/Button/Button";
+import { AppTopBar, AppTopBarSection } from "../components/layout/AppTopBar/AppTopBar";
 import { Input } from "../components/ui/Input/Input";
 import { Modal } from "../components/ui/Modal/Modal";
 import { Select } from "../components/ui/Select/Select";
@@ -384,6 +385,14 @@ export default function Home() {
     clearStoredSession();
   }
 
+  function handleTopBarNavigation(section: AppTopBarSection) {
+    if (section === "masters") {
+      navigateToView("masters", active);
+      return;
+    }
+    navigateToView(section);
+  }
+
   if (!session) {
     return (
       <main className={styles.loginPage}>
@@ -406,119 +415,53 @@ export default function Home() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.topBar}>
-        <button
-          className={styles.brandButton}
-          type="button"
-          onClick={() => {
-            navigateToView("orders");
-          }}
-        >
-          <span className={styles.brandMark} aria-hidden="true" />
-          <strong>Control de producción</strong>
-        </button>
-        <nav className={styles.topNav} aria-label="Navegacion principal">
-          <button
-            className={mainView === "orders" ? styles.navActive : ""}
-            type="button"
-            onClick={() => {
-              navigateToView("orders");
-            }}
-          >
-            <span className={`${styles.navIcon} ${styles.iconOrders}`} aria-hidden="true" />
-            Órdenes
-          </button>
-          <button
-            className={mainView === "sectors" ? styles.navActive : ""}
-            type="button"
-            onClick={() => {
-              navigateToView("sectors");
-            }}
-          >
-            <span className={`${styles.navIcon} ${styles.iconSectors}`} aria-hidden="true" />
-            Sectores
-          </button>
-          {visibleResources.length > 0 ? (
-            <button
-              className={mainView === "masters" ? styles.navActive : ""}
-              type="button"
-              onClick={() => {
-                navigateToView("masters", active);
-              }}
-            >
-              <span className={`${styles.navIcon} ${styles.iconManagement}`} aria-hidden="true" />
-              Gestión
-            </button>
-          ) : null}
-          <button
-            className={mainView === "stock" ? styles.navActive : ""}
-            type="button"
-            onClick={() => {
-              navigateToView("stock");
-            }}
-          >
-            <span className={`${styles.navIcon} ${styles.iconStock}`} aria-hidden="true" />
-            Stock
-          </button>
-          <button className={styles.navMuted} type="button" disabled>
-            <span className={`${styles.navIcon} ${styles.iconReports}`} aria-hidden="true" />
-            Reportes
-          </button>
-        </nav>
-        <div className={styles.topActions}>
-          <form
-            className={styles.topSearch}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (mainView === "orders" || mainView === "sectors") {
-                void loadOrders();
-              } else if (mainView === "stock") {
-                void loadStock(search, 1);
-              } else {
-                void loadItems();
-              }
-            }}
-          >
-            <label>
-              <span>Buscar orden</span>
-              <span className={`${styles.inputIcon} ${styles.iconSearch}`} aria-hidden="true" />
-              <input
-                name="globalSearch"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar orden"
-              />
-            </label>
-          </form>
-          <NotificationBell
-            notifications={notifications}
-            unreadCount={unreadCount}
-            isOpen={isNotificationsOpen}
-            onToggle={() => setIsNotificationsOpen((current) => !current)}
-            onMarkRead={(id) => void handleMarkNotificationRead(id)}
-            onMarkAllRead={() => void handleMarkAllNotificationsRead()}
-          />
-          <div className={styles.profileBox}>
-            <button
-              type="button"
-              className={styles.userChip}
-              title={session.user.fullName}
-              onClick={() => setIsProfileOpen((current) => !current)}
-            >
-              {userInitials(session.user.fullName)}
-            </button>
-            {isProfileOpen ? (
-              <div className={styles.profilePanel}>
-                <strong>{session.user.fullName}</strong>
-                <span>{session.user.email}</span>
-                <button type="button" onClick={handleLogout}>
-                  Cerrar sesión
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <AppTopBar
+        activeSection={mainView}
+        canShowManagement={visibleResources.length > 0}
+        onNavigate={handleTopBarNavigation}
+        searchValue={search}
+        onSearchChange={setSearch}
+        onSearchSubmit={() => {
+          if (mainView === "orders" || mainView === "sectors") {
+            void loadOrders();
+          } else if (mainView === "stock") {
+            void loadStock(search, 1);
+          } else {
+            void loadItems();
+          }
+        }}
+        actions={(
+          <>
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadCount}
+              isOpen={isNotificationsOpen}
+              onToggle={() => setIsNotificationsOpen((current) => !current)}
+              onMarkRead={(id) => void handleMarkNotificationRead(id)}
+              onMarkAllRead={() => void handleMarkAllNotificationsRead()}
+            />
+            <div className={styles.profileBox}>
+              <button
+                type="button"
+                className={styles.userChip}
+                title={session.user.fullName}
+                onClick={() => setIsProfileOpen((current) => !current)}
+              >
+                {userInitials(session.user.fullName)}
+              </button>
+              {isProfileOpen ? (
+                <div className={styles.profilePanel}>
+                  <strong>{session.user.fullName}</strong>
+                  <span>{session.user.email}</span>
+                  <button type="button" onClick={handleLogout}>
+                    Cerrar sesión
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
+      />
 
       <section className={styles.content}>
         <header className={styles.heroHeader}>
@@ -596,11 +539,11 @@ export default function Home() {
             type="button"
             onClick={() => {
               if (mainView === "masters") {
-                setModalItem("new");
+                router.push(`/gestion/${active}/nuevo`);
               } else if (mainView === "stock") {
                 setIsStockModalOpen(true);
               } else {
-                setIsOrderModalOpen(true);
+                router.push("/ordenes/nueva");
               }
             }}
           >
@@ -622,7 +565,7 @@ export default function Home() {
             onMove={(partId, stage) => void handleMovePart(partId, stage)}
             movingPartId={movingPartId}
             sectorDisplayMode={sectorDisplayMode}
-            onNewOrder={() => setIsOrderModalOpen(true)}
+            onNewOrder={() => router.push("/ordenes/nueva")}
           />
         ) : mainView === "stock" ? (
           <StockView
@@ -652,7 +595,7 @@ export default function Home() {
                 <p>{itemsTotal} registros en esta vista</p>
               </div>
               <div className={styles.sectionActions}>
-                <Button type="button" onClick={() => setModalItem("new")}>
+                <Button type="button" onClick={() => router.push(`/gestion/${active}/nuevo`)}>
                   <span className={`${styles.buttonIcon} ${styles.iconPlus}`} aria-hidden="true" />
                   {`Nuevo ${activeResource.singular}`}
                 </Button>

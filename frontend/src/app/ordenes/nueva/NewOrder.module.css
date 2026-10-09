@@ -1,0 +1,581 @@
+.page {
+  min-height: 100svh;
+  background: oklch(15% 0.015 260);
+  color: oklch(94% 0.015 255);
+}
+
+.backLink {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: oklch(19% 0.017 260);
+  padding: 0 12px;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.backLink:hover {
+  background: oklch(23% 0.023 260);
+  color: oklch(94% 0.015 255);
+}
+
+.hero {
+  display: grid;
+  align-items: start;
+  justify-content: stretch;
+  gap: 24px;
+  border-bottom: 1px solid oklch(29% 0.025 260);
+  background: oklch(19% 0.017 260 / 42%);
+  padding: 24px 28px 28px;
+}
+
+.hero h1 {
+  max-width: 760px;
+  font-family: var(--font-display);
+  font-size: clamp(42px, 7vw, 72px);
+  font-weight: 400;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.hero p {
+  max-width: 610px;
+  margin-top: 0;
+}
+
+.heroMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.heroMeta span {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: oklch(19% 0.017 260);
+  padding: 0 10px;
+  color: oklch(67% 0.025 255);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 22px;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px 28px 40px;
+}
+
+.formPanel,
+.summaryCard,
+.referenceCard {
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 8px;
+  background: oklch(19% 0.017 260);
+}
+
+.formPanel {
+  padding: 24px;
+}
+
+.notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid oklch(79% 0.15 83 / 30%);
+  border-radius: 8px;
+  background: oklch(79% 0.15 83 / 10%);
+  padding: 12px 14px;
+  color: oklch(79% 0.15 83);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.noticeIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  margin-top: 1px;
+  position: relative;
+}
+
+.noticeIcon::after {
+  content: "";
+  position: absolute;
+  inset: 6px auto auto 6px;
+  width: 2px;
+  height: 5px;
+  background: currentColor;
+}
+
+.sectionHeading {
+  margin-top: 26px;
+}
+
+.sectionHeading h2,
+.summaryCard h2,
+.referenceCard h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.sectionHeading p {
+  margin-top: 6px;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+}
+
+.fieldsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.field,
+.sizeField {
+  display: grid;
+  gap: 8px;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.sizeField input {
+  width: 100%;
+  height: 40px;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: oklch(23% 0.023 260);
+  padding: 0 11px;
+  color: oklch(94% 0.015 255);
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+}
+
+.field input::placeholder,
+.sizeField input::placeholder {
+  color: oklch(67% 0.025 255 / 65%);
+}
+
+.field input:focus,
+.field select:focus,
+.sizeField input:focus,
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.nav a:focus-visible,
+.backLink:focus-visible,
+.fabricLinks button:focus-visible {
+  outline: 2px solid oklch(66% 0.22 34);
+  outline-offset: 2px;
+}
+
+.sectionDivider {
+  height: 1px;
+  margin-top: 28px;
+  background: oklch(29% 0.025 260);
+}
+
+.sizeGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(76px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.sizeField span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.error {
+  margin-top: 18px;
+  border: 1px solid oklch(66% 0.22 34 / 50%);
+  border-radius: 8px;
+  background: oklch(66% 0.22 34 / 14%);
+  padding: 11px 12px;
+  color: oklch(84% 0.09 34);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.primaryAction,
+.secondaryAction {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.primaryAction {
+  border: 1px solid oklch(66% 0.22 34);
+  background: oklch(66% 0.22 34);
+  color: oklch(15% 0.015 260);
+}
+
+.primaryAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.secondaryAction {
+  border: 1px solid oklch(29% 0.025 260);
+  background: oklch(19% 0.017 260);
+  color: oklch(67% 0.025 255);
+}
+
+.sidePanel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.summaryCard,
+.referenceCard {
+  padding: 18px;
+}
+
+.summaryCard dl {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.summaryCard dl div {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid oklch(29% 0.025 260);
+  padding-top: 10px;
+}
+
+.summaryCard dt {
+  color: oklch(67% 0.025 255);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.summaryCard dd,
+.referenceCard p {
+  color: oklch(94% 0.015 255);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.referenceCard p {
+  margin-top: 12px;
+  color: oklch(67% 0.025 255);
+  font-weight: 600;
+}
+
+.sizeList {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  list-style: none;
+}
+
+.sizeList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid oklch(29% 0.025 260);
+  padding-top: 8px;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+}
+
+.sizeList strong {
+  color: oklch(94% 0.015 255);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 980px) {
+  .fabricLine {
+    grid-template-columns: 1fr;
+  }
+
+  .lineSpacer {
+    display: none;
+  }
+
+  .inlineReferences {
+    grid-template-columns: 1fr;
+  }
+
+
+  .hero {
+    display: grid;
+    padding: 28px 16px 22px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    padding: 18px 16px 28px;
+  }
+
+  .fieldsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sizeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .brand {
+    font-size: 17px;
+  }
+
+  .formPanel {
+    padding: 16px;
+  }
+
+  .sizeGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actions {
+    display: grid;
+  }
+}
+
+.fullField {
+  grid-column: 1 / -1;
+}
+
+.field textarea {
+  width: 100%;
+  min-height: 108px;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: oklch(23% 0.023 260);
+  padding: 11px;
+  color: oklch(94% 0.015 255);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.45;
+  outline: none;
+  resize: vertical;
+}
+
+.field textarea::placeholder {
+  color: oklch(67% 0.025 255 / 65%);
+}
+
+.field textarea:focus {
+  outline: 2px solid oklch(66% 0.22 34);
+  outline-offset: 2px;
+}
+
+.sectionHeadingCompact {
+  margin-top: 0;
+}
+
+.sectionHeadingCompact + .fieldsGrid,
+.sectionHeadingCompact + .sizeGrid,
+.sectionHeadingCompact + .fabricStack {
+  margin-top: 18px;
+}
+
+.sectionHeadingCompact h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.sectionHeadingCompact p {
+  margin-top: 6px;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+}
+
+.inlineReferences {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.inlineReferences section {
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 8px;
+  background: oklch(15% 0.015 260 / 42%);
+  padding: 14px;
+}
+
+.inlineReferences h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.inlineReferences p {
+  margin-top: 10px;
+  color: oklch(67% 0.025 255);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.fabricStack {
+  display: grid;
+  gap: 12px;
+}
+
+.fabricLine {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 0.75fr) 40px;
+  gap: 12px;
+  align-items: end;
+}
+
+.lineSpacer {
+  width: 40px;
+  height: 40px;
+}
+
+.iconButton {
+  width: 40px;
+  height: 40px;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: oklch(23% 0.023 260);
+  color: oklch(67% 0.025 255);
+  font-size: 20px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  border-color: oklch(66% 0.22 34);
+  color: oklch(94% 0.015 255);
+}
+
+.fabricLinks {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.fabricLinks button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: oklch(76% 0.18 54);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.fabricLinks button:hover {
+  color: oklch(86% 0.13 54);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.managementWorkspace {
+  max-width: 960px;
+  margin: 0;
+  padding: 24px 28px 40px;
+}
+
+.contactSection {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+  border-top: 1px solid oklch(29% 0.025 260);
+  padding-top: 22px;
+}
+
+.contactSection h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.contactStack {
+  display: grid;
+  gap: 14px;
+}
+
+.contactGroup {
+  display: grid;
+  gap: 14px;
+}
+
+.contactHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: oklch(67% 0.025 255);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.contactHeader button,
+.linkAction {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: oklch(76% 0.18 54);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.contactHeader button:hover,
+.linkAction:hover {
+  color: oklch(86% 0.13 54);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 980px) {
+  .managementWorkspace {
+    padding: 18px 16px 28px;
+  }
+}

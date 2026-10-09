@@ -80,6 +80,8 @@ Estas reglas vienen del PRD §3.4 y son las más fáciles de romper por error. E
   3. Si la tarea tocó un endpoint, `pnpm run test:e2e` del backend si existe test e2e relacionado.
 - Si la verificación funcional no puede ejecutarse por una causa externa o de entorno, el agente **no puede decir que está terminado como si estuviera probado**. Debe reportar explícitamente qué no pudo verificar, por qué, y cuál es el riesgo.
 - Si un test falla, el agente **arregla el código o el test según corresponda** — nunca comenta o borra un test para que "pase" sin resolver la causa real, salvo que el test esté objetivamente mal escrito (y en ese caso lo explicita en la respuesta).
+- En frontend, la verificación funcional debe hacerse sobre el **estado real que va a usar el usuario**. Si el usuario está trabajando en `localhost:3000`, no alcanza con levantar otro puerto alternativo salvo que se reporte explícitamente como verificación secundaria. Antes de cerrar una tarea frontend, el agente debe confirmar qué proceso escucha en `3000`, que las rutas afectadas responden `200` en ese puerto, y que la pantalla no muestra overlay de error.
+- No correr `next build` mientras hay un `next dev` activo usando el mismo `.next` del proyecto. Si se necesita build y también hay que dejar el entorno local usable, detener/reiniciar el dev server después del build y volver a verificar `localhost:3000`.
 - Toda nueva regla de negocio de la sección 3 de este documento (invariantes del modelo de datos) debe tener al menos un test unitario que la cubra.
 
 ## 7. Migraciones
