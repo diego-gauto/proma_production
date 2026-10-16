@@ -238,6 +238,40 @@ describe('Orders (e2e)', () => {
   }
 
 
+  it.each([SectorCode.BORDADO, SectorCode.ESTAMPADO])('registra lotes independientes y completa todas las partes de %s', async (sector) => {
+    const fixture = await createOrderFixture(`Lotes-${sector}`);
+    await dataSource.query('DELETE FROM article_decoration_parts WHERE article_id = $1', [fixture.articleId]);
+    await dataSource.query(`INSERT INTO article_decoration_parts (article_id, garment_part, decoration_type) VALUES ($1, 'Pecho', $2), ($1, 'Manga', $2)`, [fixture.articleId, sector]);
+    const created = await request(app.getHttpServer()).post('/api/v1/orders').set('Authorization', `Bearer ${token}`).send({
+      externalCode: `EXT-${suffix}-${sector}`, clientId: fixture.clientId, articleId: fixture.articleId, fabricId: fixture.fabricId, sizeCurveId: fixture.sizeCurveId,
+      requestedItems: [{ sizeCurveValueId: fixture.sizes[0].id, color: 'Azul', quantityRequested: 10 }],
+    }).expect(201);
+    const partId = created.body.parts[0].id;
+    const stages = await dataSource.query('SELECT id, code FROM stages');
+    const stageId = (code: string) => stages.find((stage: { code: string }) => stage.code === code).id;
+    const post = (path: string, body: object, auth = token) => request(app.getHttpServer()).post(`/api/v1/order-parts/${partId}/${path}`).set('Authorization', `Bearer ${auth}`).send(body);
+    await post('stage-events/start', { stageId: stageId('CORTE'), executionType: 'INTERNO' }).expect(201);
+    await post('cut-loads', { lotCode: 'Corte 1', items: [{ sizeCurveValueId: fixture.sizes[0].id, quantity: 10 }] }).expect(201);
+    const sectorToken = await createSectorToken(`lotes-${sector}`, sector, [PermissionAction.VER, PermissionAction.INICIAR_ETAPA, PermissionAction.FINALIZAR_ETAPA]);
+    await post('stage-events/start', { stageId: stageId(sector), executionType: 'INTERNO' }, sectorToken).expect(201);
+    const body = (garmentPart: string, quantity: number) => ({ garmentPart, lotCode: 'Lote 1', workDate: '2026-10-14', items: [{ sizeCurveValueId: fixture.sizes[0].id, quantity }] });
+    const wrongToken = await createSectorToken(`incorrecto-${sector}`, SectorCode.CORTE, [PermissionAction.FINALIZAR_ETAPA]);
+    await post('decoration-loads', body('Pecho', 10), wrongToken).expect(403);
+    await post('decoration-loads', body('Espalda', 10), sectorToken).expect(400);
+    const chest = await post('decoration-loads', body('Pecho', 10), sectorToken).expect(201);
+    expect(chest.body.stageFinished).toBe(false);
+    await post('stage-events/finish', {}, sectorToken).expect(400);
+    await post('decoration-loads', body('Pecho', 1), sectorToken).expect(400);
+    const sleeve = await post('decoration-loads', body('Manga', 4), sectorToken).expect(201);
+    expect(sleeve.body.stageFinished).toBe(false);
+    const last = await post('decoration-loads', { ...body('Manga', 6), lotCode: 'Lote 2' }, sectorToken).expect(201);
+    expect(last.body.stageFinished).toBe(true);
+    const detail = await request(app.getHttpServer()).get(`/api/v1/orders/${created.body.id}`).set('Authorization', `Bearer ${token}`).expect(200);
+    expect(detail.body.parts[0].decorationLoads).toHaveLength(3);
+    expect(detail.body.parts[0].decorationLoads).toEqual(expect.arrayContaining([expect.objectContaining({ garmentPart: 'Manga', lotCode: 'Lote 2' })]));
+    await dataSource.query('DELETE FROM orders WHERE id = $1', [created.body.id]);
+  });
+
   it('creates an order with real order fabric, curve, requested items, root part and supply checklist', async () => {
     const fixture = await createOrderFixture('Crear');
 
@@ -640,6 +674,89 @@ describe('Orders (e2e)', () => {
       .expect(201);
   });
 
+
+  it('filters order list and detail for sector users by their visible sector', async () => {
+    const fixture = await createOrderFixture('VisibleSector');
+    const corteOrder = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-VISIBLE-CORTE`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 6 },
+        ],
+      })
+      .expect(201);
+    const bordadoOrder = await request(app.getHttpServer())
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        externalCode: `EXT-${suffix}-VISIBLE-BORDADO`,
+        clientId: fixture.clientId,
+        articleId: fixture.articleId,
+        fabricId: fixture.fabricId,
+        sizeCurveId: fixture.sizeCurveId,
+        requestedItems: [
+          { sizeCurveValueId: fixture.sizes[1].id, quantityRequested: 8 },
+        ],
+      })
+      .expect(201);
+    const corteStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.CORTE],
+    );
+    const bordadoStage = await dataSource.query(
+      'SELECT id FROM stages WHERE code = $1',
+      [SectorCode.BORDADO],
+    );
+    await dataSource.query(
+      `
+        UPDATE order_parts
+        SET current_stage_id = $1, status = $2
+        WHERE id = $3
+      `,
+      [corteStage[0].id, PartStatus.EN_PROCESO, corteOrder.body.parts[0].id],
+    );
+    await dataSource.query(
+      `
+        UPDATE order_parts
+        SET current_stage_id = $1, status = $2
+        WHERE id = $3
+      `,
+      [bordadoStage[0].id, PartStatus.EN_PROCESO, bordadoOrder.body.parts[0].id],
+    );
+    const corteToken = await createSectorToken(
+      'corte-visible-orders',
+      SectorCode.CORTE,
+      [PermissionAction.VER, PermissionAction.FINALIZAR_ETAPA],
+    );
+
+    const listed = await request(app.getHttpServer())
+      .get('/api/v1/orders')
+      .set('Authorization', `Bearer ${corteToken}`)
+      .query({ search: `EXT-${suffix}-VISIBLE` })
+      .expect(200);
+    expect(listed.body.items).toEqual([
+      expect.objectContaining({ externalCode: `EXT-${suffix}-VISIBLE-CORTE` }),
+    ]);
+
+    const corteDetail = await request(app.getHttpServer())
+      .get(`/api/v1/orders/${corteOrder.body.id}`)
+      .set('Authorization', `Bearer ${corteToken}`)
+      .expect(200);
+    expect(corteDetail.body.parts).toHaveLength(1);
+    expect(corteDetail.body.parts[0].currentStage.code).toBe(SectorCode.CORTE);
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/orders/${bordadoOrder.body.id}`)
+      .set('Authorization', `Bearer ${corteToken}`)
+      .expect(403);
+  });
+
   it('starts stages with sector permissions and validates active events and external workshops', async () => {
     const fixture = await createOrderFixture('Start');
     const created = await request(app.getHttpServer())
@@ -790,6 +907,14 @@ describe('Orders (e2e)', () => {
       })
       .expect(201);
 
+    await request(app.getHttpServer())
+      .post(`/api/v1/order-parts/${partId}/stage-events/finish`)
+      .set('Authorization', `Bearer ${token}`).send({ includesAtraque: true }).expect(400);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/supply-preparations/${partId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ category: 'CONFECCION', action: 'SAVE', items: [{ supplyId: fixture.supplyId, quantityAvailable: 5, completeness: 'COMPLETO' }] }).expect(200);
+
     const finishedConfeccion = await request(app.getHttpServer())
       .post(`/api/v1/order-parts/${partId}/stage-events/finish`)
       .set('Authorization', `Bearer ${token}`)
@@ -830,6 +955,48 @@ describe('Orders (e2e)', () => {
     expect(detail.body.status).toBe(OrderStatus.FINALIZADA);
     expect(detail.body.finalizedAt).toEqual(expect.any(String));
     expect(detail.body.parts[0].status).toBe(PartStatus.FINALIZADA);
+  });
+
+  it('prepares avíos in parallel with category permissions, totals, shortage and surplus', async () => {
+    const fixture = await createOrderFixture('Parallel');
+    const created = await request(app.getHttpServer()).post('/api/v1/orders').set('Authorization', `Bearer ${token}`).send({
+      externalCode: `EXT-${suffix}-PARALLEL`, clientId: fixture.clientId, articleId: fixture.articleId,
+      fabricId: fixture.fabricId, sizeCurveId: fixture.sizeCurveId,
+      requestedItems: [{ sizeCurveValueId: fixture.sizes[0].id, quantityRequested: 10 }],
+    }).expect(201);
+    const orderId = created.body.id as string;
+    const partId = created.body.parts[0].id as string;
+    const worker = await createSectorToken('parallel-worker', SectorCode.AVIOS_CONFECCION, [PermissionAction.VER, PermissionAction.EDITAR]);
+    const read = () => request(app.getHttpServer()).get(`/api/v1/supply-preparations/${orderId}?category=CONFECCION`).set('Authorization', `Bearer ${worker}`);
+    const list = await request(app.getHttpServer()).get(`/api/v1/supply-preparations?category=CONFECCION&search=EXT-${suffix}-PARALLEL&page=1&limit=1`).set('Authorization', `Bearer ${worker}`).expect(200);
+    expect(list.body.total).toBe(1);
+    expect(list.body.items[0].id).toBe(orderId);
+    const initial = await read().expect(200);
+    expect(initial.body.status).toBe('PARA_PREPARAR');
+    expect(initial.body.parts[0].supplies[0]).toMatchObject({ perUnit: 2, total: 20 });
+    const aviosStage = await dataSource.query('SELECT id FROM stages WHERE code = $1', [SectorCode.AVIOS_CONFECCION]);
+    const sewingStage = await dataSource.query('SELECT id FROM stages WHERE code = $1', [SectorCode.CONFECCION]);
+    // Legacy sequential records must not prevent starting production with no preparation.
+    await dataSource.query(`INSERT INTO part_stage_events (order_part_id, stage_id, execution_type, started_at, performed_by)
+      SELECT $1, $2, 'INTERNO', NOW(), id FROM users WHERE email = $3`, [partId, aviosStage[0].id, email]);
+    await request(app.getHttpServer()).post(`/api/v1/order-parts/${partId}/stage-events/start`).set('Authorization', `Bearer ${token}`)
+      .send({ stageId: sewingStage[0].id, executionType: 'INTERNO' }).expect(201);
+    await request(app.getHttpServer()).post(`/api/v1/order-parts/${partId}/stage-events/finish`).set('Authorization', `Bearer ${token}`).send({}).expect(400);
+
+    const patch = (body: object) => request(app.getHttpServer()).patch(`/api/v1/supply-preparations/${partId}`).set('Authorization', `Bearer ${worker}`).send(body);
+    await patch({ category: 'TERMINACION', action: 'START', items: [] }).expect(403);
+    await patch({ category: 'CONFECCION', action: 'START', items: [] }).expect(200);
+    expect((await read()).body.status).toBe('EN_PREPARACION');
+    await patch({ category: 'CONFECCION', action: 'SAVE', items: [{ supplyId: fixture.supplyId, quantityAvailable: 5, completeness: 'COMPLETO' }] }).expect(400);
+    await patch({ category: 'CONFECCION', action: 'SAVE', items: [{ supplyId: fixture.supplyId, quantityAvailable: 5, completeness: 'PARCIAL' }] }).expect(200);
+    expect((await read()).body.status).toBe('INCOMPLETO');
+    await patch({ category: 'CONFECCION', action: 'SAVE', items: [{ supplyId: fixture.supplyId, quantityAvailable: 23, completeness: 'PARCIAL' }] }).expect(200);
+    const completed = await read().expect(200);
+    expect(completed.body.status).toBe('TERMINADO');
+    expect(completed.body.parts[0].supplies[0].quantityAvailable).toBe(23);
+    expect(JSON.stringify(completed.body)).not.toContain('passwordHash');
+    const events = await dataSource.query('SELECT id FROM part_stage_events WHERE order_part_id = $1 AND finished_at IS NULL', [partId]);
+    expect(events).toHaveLength(1);
   });
 
   it('updates part supplies and marks and resolves order repair', async () => {

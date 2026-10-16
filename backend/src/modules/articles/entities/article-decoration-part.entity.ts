@@ -24,4 +24,16 @@ export class ArticleDecorationPart {
 
   @Column({ name: 'decoration_type', type: 'varchar', length: 30 })
   decorationType!: string;
+
+  @Column({ name: 'placement', type: 'varchar', length: 120, nullable: true })
+  placement!: string | null;
+
+  @Column({ name: 'decoration_code', type: 'varchar', length: 80, nullable: true })
+  decorationCode!: string | null;
+
+  @Column({ name: 'image_url', type: 'varchar', length: 500, nullable: true })
+  imageUrl!: string | null;
+
+  @Column({ name: 'notes', type: 'varchar', length: 500, nullable: true })
+  notes!: string | null;
 }

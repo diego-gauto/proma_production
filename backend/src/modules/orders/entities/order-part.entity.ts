@@ -14,6 +14,8 @@ import { Stage } from '../../catalog/entities/stage.entity';
 import { Notification } from '../../notifications/entities/notification.entity';
 import { PartSplitMode, PartStatus } from './order.enums';
 import { Order } from './order.entity';
+import { PartCutLoad } from './part-cut-load.entity';
+import { PartDecorationLoad } from './part-decoration-load.entity';
 import { PartStageEvent } from './part-stage-event.entity';
 import { PartSupply } from './part-supply.entity';
 
@@ -107,6 +109,12 @@ export class OrderPart {
 
   @OneToMany(() => PartStageEvent, (event) => event.orderPart)
   events!: PartStageEvent[];
+
+  @OneToMany(() => PartCutLoad, (load) => load.orderPart)
+  cutLoads!: PartCutLoad[];
+
+  @OneToMany(() => PartDecorationLoad, (load) => load.orderPart)
+  decorationLoads!: PartDecorationLoad[];
 
   @OneToMany(() => PartSupply, (supply) => supply.orderPart, { cascade: ['insert', 'update'] })
   supplies!: PartSupply[];

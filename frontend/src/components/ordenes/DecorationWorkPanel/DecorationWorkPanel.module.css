@@ -1,0 +1,32 @@
+.section { border-bottom: 1px solid #222838; }
+.section h2 { margin: 0; }
+.partTitle { font-size: 18px; margin: 24px 0 12px; }
+.notice { color: #d5def0; padding: 12px 0; line-height: 1.5; }
+.form { padding: 20px; background: #10141f; }
+.form h3 { margin: 0 0 18px; font-size: 18px; }
+.fields, .sizes { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.form label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #d5def0; }
+.form input { width: 100%; min-height: 40px; border: 1px solid #46516a; border-radius: 6px; padding: 8px 12px; background: #080a11; color: #f7f9ff; font: inherit; color-scheme: dark; }
+.form input:focus-visible, .cancel:focus-visible, .history summary:focus-visible { outline: 2px solid #ff6948; outline-offset: 3px; }
+.form input:disabled { opacity: .55; }
+.sizes label { width: 100px; }
+.sizes small { color: #aab7cc; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.cancel { border: 1px solid #46516a; border-radius: 6px; padding: 10px 16px; background: transparent; color: #f7f9ff; cursor: pointer; }
+.cancel:hover { background: #222838; }
+.section button:disabled { opacity: .55; cursor: default; }
+.history { padding: 0 20px 16px; color: #d5def0; font-size: 13px; }
+.history summary { cursor: pointer; padding: 10px 0; }
+.tableWrap { overflow-x: auto; }
+.history table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.history th, .history td { padding: 10px 12px; border-bottom: 1px solid #222838; text-align: left; white-space: nowrap; }
+@media (max-width: 600px) { .form { padding: 16px 0; } .history { padding: 0 0 16px; } .fields label { width: 100%; } .sizes { gap: 12px; } .sizes label { width: calc(33.333% - 8px); } }
+
+.panel { display: grid; gap: 18px; }
+.panel .cutLotSheetWrap { margin-top: 0; }
+.partTitle { color: #f7f9ff; margin: 6px 0 0; font-size: 16px; }
+.notice { color: #d5def0; padding: 12px 0; line-height: 1.5; }
+
+.panelStatus { color: #9babca; font-family: var(--font-mono); font-size: 10px; font-weight: 800; text-transform: uppercase; text-align: right; }
+.addLotButton { border: 0; background: transparent; color: #ff3b12; padding: 2px 0; font: inherit; font-size: 13px; font-weight: 900; text-align: left; cursor: pointer; }
+.addLotButton:hover { color: #ff7659; }

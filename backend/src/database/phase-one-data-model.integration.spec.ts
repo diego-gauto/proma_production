@@ -6,6 +6,12 @@ import { ArticleSupply } from '../modules/articles/entities/article-supply.entit
 import { Article } from '../modules/articles/entities/article.entity';
 import { ClientContact } from '../modules/clients/entities/client-contact.entity';
 import { Client } from '../modules/clients/entities/client.entity';
+import { FabricRoll } from '../modules/inventory/entities/fabric-roll.entity';
+import { FabricStockEntry } from '../modules/inventory/entities/fabric-stock-entry.entity';
+import { Provider } from '../modules/inventory/entities/provider.entity';
+import { SupplyStockEntry } from '../modules/inventory/entities/supply-stock-entry.entity';
+import { StockAdjustment } from '../modules/inventory/entities/stock-adjustment.entity';
+import { ProviderContact } from '../modules/inventory/entities/provider-contact.entity';
 import { Fabric } from '../modules/catalog/entities/fabric.entity';
 import { SizeCurveValue } from '../modules/catalog/entities/size-curve-value.entity';
 import { SizeCurve } from '../modules/catalog/entities/size-curve.entity';
@@ -15,6 +21,10 @@ import { Notification } from '../modules/notifications/entities/notification.ent
 import { OrderPart } from '../modules/orders/entities/order-part.entity';
 import { OrderRequestedItem } from '../modules/orders/entities/order-requested-item.entity';
 import { Order } from '../modules/orders/entities/order.entity';
+import { PartCutLoadItem } from '../modules/orders/entities/part-cut-load-item.entity';
+import { PartCutLoad } from '../modules/orders/entities/part-cut-load.entity';
+import { PartDecorationLoadItem } from '../modules/orders/entities/part-decoration-load-item.entity';
+import { PartDecorationLoad } from '../modules/orders/entities/part-decoration-load.entity';
 import { PartStageEvent } from '../modules/orders/entities/part-stage-event.entity';
 import { PartSupply } from '../modules/orders/entities/part-supply.entity';
 import { SystemSetting } from '../modules/settings/entities/system-setting.entity';
@@ -80,6 +90,16 @@ describe('phase one data model', () => {
         Order,
         OrderRequestedItem,
         OrderPart,
+        Provider,
+        StockAdjustment,
+        SupplyStockEntry,
+        ProviderContact,
+        FabricStockEntry,
+        FabricRoll,
+        PartCutLoad,
+        PartCutLoadItem,
+        PartDecorationLoad,
+        PartDecorationLoadItem,
         PartStageEvent,
         PartSupply,
         Notification,

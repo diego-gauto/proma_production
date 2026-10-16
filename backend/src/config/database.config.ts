@@ -1,3 +1,4 @@
+import { AddDecorationLoadGarmentParts1791056400000 } from '../database/migrations/1791056400000-AddDecorationLoadGarmentParts';
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { InitialDummyMigration1724457600000 } from '../database/migrations/1724457600000-InitialDummyMigration';
@@ -9,6 +10,12 @@ import { AddOrderCreationRelations1791055200000 } from '../database/migrations/1
 import { AddProvidersAndStockEntries1791055300000 } from '../database/migrations/1791055300000-AddProvidersAndStockEntries';
 import { AddWorkshopSpecialtyDetail1791055400000 } from '../database/migrations/1791055400000-AddWorkshopSpecialtyDetail';
 import { AddDeletedAtToMasters1791055500000 } from '../database/migrations/1791055500000-AddDeletedAtToMasters';
+import { AddStructuredAddressFields1791055800000 } from '../database/migrations/1791055800000-AddStructuredAddressFields';
+import { AddEntityContactFields1791055700000 } from '../database/migrations/1791055700000-AddEntityContactFields';
+import { AddArticleDecorationDetails1791055900000 } from '../database/migrations/1791055900000-AddArticleDecorationDetails';
+import { AddFabricUseTypeAndConsumptionUnit1791056300000 } from '../database/migrations/1791056300000-AddFabricUseTypeAndConsumptionUnit';
+import { AddPartDecorationLoads1791056200000 } from '../database/migrations/1791056200000-AddPartDecorationLoads';
+import { AddPartCutLoads1791056100000 } from '../database/migrations/1791056100000-AddPartCutLoads';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -25,7 +32,14 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
     AddOrderCreationRelations1791055200000,
     AddProvidersAndStockEntries1791055300000,
     AddWorkshopSpecialtyDetail1791055400000,
-      AddDeletedAtToMasters1791055500000,
+    AddDeletedAtToMasters1791055500000,
+    AddEntityContactFields1791055700000,
+    AddStructuredAddressFields1791055800000,
+    AddArticleDecorationDetails1791055900000,
+    AddPartCutLoads1791056100000,
+    AddPartDecorationLoads1791056200000,
+    AddFabricUseTypeAndConsumptionUnit1791056300000,
+    AddDecorationLoadGarmentParts1791056400000,
   ],
   migrationsRun: false,
   logging: process.env.NODE_ENV === 'development',

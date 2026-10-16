@@ -31,6 +31,7 @@ type DashboardRow = {
   rowType: DashboardRowType;
   stage: Stage | null;
   location: string;
+  activeNote: string | null;
   startedAt: Date | null;
   estimatedFinishAt: Date | null;
   daysInStage: number | null;
@@ -80,6 +81,7 @@ export class DashboardService {
     });
     const visibleStages = stages.filter(
       (stage) =>
+        ![SectorCode.AVIOS_CONFECCION, SectorCode.AVIOS_TERMINACION].includes(stage.code) &&
         (!query.stageId || stage.id === query.stageId) &&
         (!allowedSectors || allowedSectors.includes(stage.code)),
     );
@@ -247,6 +249,7 @@ export class DashboardService {
         activeEvent?.workshop?.name ??
         order.initialWorkshop?.name ??
         'Planta interna',
+      activeNote: activeEvent?.note ?? null,
       startedAt,
       estimatedFinishAt: activeEvent?.estimatedFinishAt ?? null,
       daysInStage,

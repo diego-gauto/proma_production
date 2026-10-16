@@ -20,3 +20,15 @@ Actualizar modelo y vistas ABM para reflejar que telas y avios son entidades pur
 - Test rojo inicial correcto: fabrics aceptaba supplier directo.
 - Backend unitario fallo por seed demo con supplier; corregido.
 - API providers devolvio 500 por TypeORM con leftJoin + skip/take; corregido con findAndCount.
+
+
+---
+
+# Avíos — plan de trabajo
+1. Contexto y preservación: rama feature/avios-sector desde develop (mismo HEAD); copia previa en /tmp/proma-before-avios-20261015.tar.gz. Cambios anteriores conservados explícitamente.
+2. Implementar preparación paralela por categoría, cantidades y estados con tests primero.
+3. Implementar listado/detalle con estilos de Corte, permisos y paginación.
+4. Validar cierres de Confección/Terminación y Ojal y Botón según clasificación confirmada.
+5. Ejecutar tests, tipos, e2e, migraciones si corresponden y navegador localhost:3000.
+
+Pendiente de respuesta: clasificación explícita de avíos necesarios para Ojal y Botón.

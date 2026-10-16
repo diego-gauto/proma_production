@@ -45,6 +45,38 @@ describe('demo seed', () => {
     expect(clients[0].count).toBeGreaterThanOrEqual(2);
     expect(workshops[0].count).toBeGreaterThanOrEqual(3);
     expect(articles[0].count).toBeGreaterThanOrEqual(2);
-    expect(orders[0].count).toBeGreaterThanOrEqual(5);
+    expect(orders[0].count).toBeGreaterThanOrEqual(10);
+
+    const sectorOrders = await dataSource.query(`
+      SELECT s.code, count(*)::int AS count
+      FROM orders o
+      JOIN order_parts p ON p.order_id = o.id
+      JOIN stages s ON s.id = p.current_stage_id
+      WHERE o.external_code LIKE 'DEMO-%' AND s.code IN ('BORDADO', 'ESTAMPADO')
+      GROUP BY s.code
+    `);
+    expect(sectorOrders).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'BORDADO', count: expect.any(Number) }),
+      expect.objectContaining({ code: 'ESTAMPADO', count: expect.any(Number) }),
+    ]));
+    expect(sectorOrders.every((row: { count: number }) => row.count >= 2)).toBe(true);
+
+    const aviosEditors = await dataSource.query(`
+      SELECT u.email, p.sector_code AS "sectorCode", p.action
+      FROM users u
+      JOIN user_permissions p ON p.user_id = u.id
+      WHERE u.email = 'avios@demo.proma.local'
+        AND p.action = 'EDITAR'
+      ORDER BY p.sector_code
+    `);
+    expect(aviosEditors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ email: 'avios@demo.proma.local', sectorCode: 'AVIOS_CONFECCION', action: 'EDITAR' }),
+      expect.objectContaining({ email: 'avios@demo.proma.local', sectorCode: 'AVIOS_TERMINACION', action: 'EDITAR' }),
+    ]));
+    const oldAviosUsers = await dataSource.query(`
+      SELECT email, is_active AS "isActive" FROM users
+      WHERE email IN ('avios_confeccion@demo.proma.local', 'avios_terminacion@demo.proma.local')
+    `);
+    expect(oldAviosUsers.every((user: { isActive: boolean }) => !user.isActive)).toBe(true);
   });
 });
