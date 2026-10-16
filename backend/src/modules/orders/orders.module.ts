@@ -24,6 +24,10 @@ import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { SectorProgressService } from './sector-progress.service';
 import { StageEventsService } from './stage-events.service';
+import { ConfectionService } from './confection.service';
+import { ConfectionController } from './confection.controller';
+import { ConfectionAssignment } from './entities/confection-assignment.entity';
+import { ConfectionDelivery } from './entities/confection-delivery.entity';
 
 @Module({
   imports: [
@@ -45,9 +49,11 @@ import { StageEventsService } from './stage-events.service';
       PartCutLoadItem,
       PartCutLoad,
       Stage,
+      ConfectionAssignment,
+      ConfectionDelivery,
     ]),
   ],
-  controllers: [OrdersController, OrderPartsController, SupplyPreparationsController],
-  providers: [OrdersService, StageEventsService, SectorProgressService, SupplyPreparationsService],
+  controllers: [OrdersController, OrderPartsController, SupplyPreparationsController, ConfectionController],
+  providers: [OrdersService, StageEventsService, SectorProgressService, SupplyPreparationsService, ConfectionService],
 })
 export class OrdersModule {}
