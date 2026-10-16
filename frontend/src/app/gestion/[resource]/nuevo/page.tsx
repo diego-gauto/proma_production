@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AppTopBar } from "../../../../components/layout/AppTopBar/AppTopBar";
 import { isUnauthorizedError, LoginResponse } from "../../../../lib/api/client";
-import { createMaster, MasterName } from "../../../../lib/api/masters.api";
+import { createMaster, listMasters, MasterName, SupplyMaster } from "../../../../lib/api/masters.api";
 import {
   buildPayload,
   FormState,
@@ -13,6 +13,13 @@ import {
   masterResources,
   resourceKeys,
 } from "../../../../lib/masters/master-form-helpers";
+import {
+  ARGENTINA_PROVINCES,
+  fetchDepartments,
+  fetchLocalities,
+  GeoOption,
+  validateStreetAddress,
+} from "../../../../lib/geo/argentina";
 import styles from "../../../ordenes/nueva/NewOrder.module.css";
 
 type FieldKind = "input" | "select" | "textarea";
@@ -26,34 +33,61 @@ type FieldConfig = {
   placeholder?: string;
   options?: { label: string; value: string }[];
   span?: "full";
+  disabled?: boolean;
+  loadingLabel?: string;
 };
 
 type ContactRow = {
   id: string;
   contactName: string;
-  email: string;
-  fixedPhone: string;
   mobilePhone1: string;
-  mobilePhone2: string;
   roleNote: string;
 };
+
+type ArticleSupplyRow = {
+  id: string;
+  supplyId: string;
+  quantity: string;
+  note: string;
+};
+
+type DecorationRow = {
+  id: string;
+  garmentPart: string;
+  placement: string;
+  decorationCode: string;
+  imageUrl: string;
+  notes: string;
+};
+
+type DecorationType = "BORDADO" | "ESTAMPADO";
 
 const fieldConfigs: Record<MasterName, FieldConfig[]> = {
   clients: [
     { name: "businessName", label: "Razón social", required: true, span: "full" },
     { name: "taxId", label: "CUIT/CUIL", required: true },
-    { name: "address", label: "Dirección" },
-    { name: "locality", label: "Localidad" },
-    { name: "district", label: "Partido" },
-    { name: "province", label: "Provincia" },
+    { name: "businessSector", label: "Rubro" },
+    { name: "email", label: "Email", type: "email" },
+    { name: "fixedPhone", label: "Teléfono fijo" },
+    { name: "province", label: "Provincia", kind: "select" },
+    { name: "district", label: "Partido", kind: "select" },
+    { name: "locality", label: "Localidad", kind: "select" },
+    { name: "street", label: "Calle" },
+    { name: "streetNumber", label: "Número" },
+    { name: "floorApartment", label: "Piso / departamento" },
   ],
   providers: [
     { name: "businessName", label: "Proveedor", required: true, span: "full" },
     { name: "taxId", label: "CUIT/CUIL" },
-    { name: "address", label: "Dirección" },
-    { name: "locality", label: "Localidad" },
-    { name: "district", label: "Partido" },
-    { name: "province", label: "Provincia" },
+    { name: "businessSector", label: "Rubro" },
+    { name: "email", label: "Email", type: "email" },
+    { name: "fixedPhone", label: "Teléfono fijo" },
+    { name: "province", label: "Provincia", kind: "select" },
+    { name: "district", label: "Partido", kind: "select" },
+    { name: "locality", label: "Localidad", kind: "select" },
+    { name: "street", label: "Calle" },
+    { name: "streetNumber", label: "Número" },
+    { name: "floorApartment", label: "Piso / departamento" },
   ],
   workshops: [
     { name: "name", label: "Nombre", required: true, span: "full" },
@@ -65,10 +99,14 @@ const fieldConfigs: Record<MasterName, FieldConfig[]> = {
       { label: "Terminación", value: "TERMINACION" },
     ] },
     { name: "specialtyDetail", label: "Especialidad", placeholder: "Pantalones, remeras, camperas" },
-    { name: "address", label: "Dirección" },
-    { name: "locality", label: "Localidad" },
-    { name: "district", label: "Partido" },
-    { name: "province", label: "Provincia" },
+    { name: "email", label: "Email", type: "email" },
+    { name: "fixedPhone", label: "Teléfono fijo" },
+    { name: "province", label: "Provincia", kind: "select" },
+    { name: "district", label: "Partido", kind: "select" },
+    { name: "locality", label: "Localidad", kind: "select" },
+    { name: "street", label: "Calle" },
+    { name: "streetNumber", label: "Número" },
+    { name: "floorApartment", label: "Piso / departamento" },
   ],
   fabrics: [
     { name: "code", label: "Artículo / código", required: true },
@@ -94,8 +132,6 @@ const fieldConfigs: Record<MasterName, FieldConfig[]> = {
     { name: "code", label: "Artículo / código", required: true },
     { name: "name", label: "Nombre", required: true },
     { name: "description", label: "Descripción", span: "full" },
-    { name: "supplies", label: "Avíos", kind: "textarea", span: "full", placeholder: "uuid-avio|4|Puños; uuid-avio-2|1" },
-    { name: "decorationParts", label: "Partes decorables", kind: "textarea", span: "full", placeholder: "Pecho:BORDADO; Espalda:ESTAMPADO" },
   ],
   users: [
     { name: "fullName", label: "Nombre", required: true },
@@ -106,23 +142,51 @@ const fieldConfigs: Record<MasterName, FieldConfig[]> = {
   ],
 };
 
+function createRowId(): string {
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 function createContactRow(): ContactRow {
   return {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: createRowId(),
     contactName: "",
-    email: "",
-    fixedPhone: "",
     mobilePhone1: "",
-    mobilePhone2: "",
     roleNote: "",
   };
+}
+
+function createArticleSupplyRow(): ArticleSupplyRow {
+  return { id: createRowId(), supplyId: "", quantity: "", note: "" };
+}
+
+function createDecorationRow(): DecorationRow {
+  return { id: createRowId(), garmentPart: "", placement: "", decorationCode: "", imageUrl: "", notes: "" };
 }
 
 function encodeContacts(rows: ContactRow[]): string {
   return rows
     .filter((row) => Object.entries(row).some(([key, value]) => key !== "id" && value.trim()))
-    .map((row) => [row.contactName, row.email, row.fixedPhone, row.mobilePhone1, row.mobilePhone2, row.roleNote].join("|"))
+    .map((row) => [row.contactName, row.mobilePhone1, row.roleNote].join("|"))
     .join("; ");
+}
+
+function encodeArticleSupplies(rows: ArticleSupplyRow[]): string {
+  return JSON.stringify(rows
+    .filter((row) => row.supplyId)
+    .map((row) => ({ supplyId: row.supplyId, quantity: row.quantity ? Number(row.quantity) : undefined, note: row.note })));
+}
+
+function encodeDecorations(rows: DecorationRow[], decorationType: DecorationType): string {
+  return JSON.stringify(rows
+    .filter((row) => row.garmentPart.trim() || row.placement.trim() || row.decorationCode.trim() || row.imageUrl.trim() || row.notes.trim())
+    .map((row) => ({
+      decorationType,
+      garmentPart: row.garmentPart,
+      placement: row.placement,
+      decorationCode: row.decorationCode,
+      imageUrl: row.imageUrl,
+      notes: row.notes,
+    })));
 }
 
 function loadStoredSession(): LoginResponse | null {
@@ -145,8 +209,20 @@ export default function NewManagementResourcePage() {
   const [session, setSession] = useState<LoginResponse | null>(null);
   const [form, setForm] = useState<FormState>(() => initialForm(isValidResource ? resource : "clients", null));
   const [contactRows, setContactRows] = useState<ContactRow[]>([createContactRow()]);
+  const [articleSupplyRows, setArticleSupplyRows] = useState<ArticleSupplyRow[]>([createArticleSupplyRow()]);
+  const [embroideryRows, setEmbroideryRows] = useState<DecorationRow[]>([createDecorationRow()]);
+  const [printingRows, setPrintingRows] = useState<DecorationRow[]>([createDecorationRow()]);
+  const [supplyOptions, setSupplyOptions] = useState<SupplyMaster[]>([]);
+  const [isLoadingSupplies, setIsLoadingSupplies] = useState(false);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isValidatingAddress, setIsValidatingAddress] = useState(false);
+  const [addressWarning, setAddressWarning] = useState("");
+  const [districtOptions, setDistrictOptions] = useState<GeoOption[]>([]);
+  const [localityOptions, setLocalityOptions] = useState<GeoOption[]>([]);
+  const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
+  const [isLoadingLocalities, setIsLoadingLocalities] = useState(false);
+  const [geoError, setGeoError] = useState("");
 
   useEffect(() => {
     setSession(loadStoredSession());
@@ -156,14 +232,108 @@ export default function NewManagementResourcePage() {
     if (isValidResource) {
       setForm(initialForm(resource, null));
       setContactRows([createContactRow()]);
+      setArticleSupplyRows([createArticleSupplyRow()]);
+      setEmbroideryRows([createDecorationRow()]);
+      setPrintingRows([createDecorationRow()]);
     }
   }, [isValidResource, resource]);
 
   const fields = useMemo(() => fieldConfigs[isValidResource ? resource : "clients"], [isValidResource, resource]);
   const usesContacts = resource === "clients" || resource === "providers" || resource === "workshops";
 
+  const loadDistricts = useCallback(async (province: string) => {
+    if (!province) {
+      setDistrictOptions([]);
+      return;
+    }
+    setGeoError("");
+    setIsLoadingDistricts(true);
+    try {
+      setDistrictOptions(await fetchDepartments(province));
+    } catch (err) {
+      setDistrictOptions([]);
+      setGeoError(err instanceof Error ? err.message : "No se pudieron cargar los partidos.");
+    } finally {
+      setIsLoadingDistricts(false);
+    }
+  }, []);
+
+  const loadLocalities = useCallback(async (province: string, district: string) => {
+    if (!province || !district) {
+      setLocalityOptions([]);
+      return;
+    }
+    setGeoError("");
+    setIsLoadingLocalities(true);
+    try {
+      setLocalityOptions(await fetchLocalities(province, district));
+    } catch (err) {
+      setLocalityOptions([]);
+      setGeoError(err instanceof Error ? err.message : "No se pudieron cargar las localidades.");
+    } finally {
+      setIsLoadingLocalities(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (usesContacts) {
+      void loadDistricts(form.province ?? "");
+    }
+  }, [form.province, loadDistricts, usesContacts]);
+
+  useEffect(() => {
+    if (usesContacts) {
+      void loadLocalities(form.province ?? "", form.district ?? "");
+    }
+  }, [form.district, form.province, loadLocalities, usesContacts]);
+
+  useEffect(() => {
+    if (resource !== "articles" || !session) {
+      return;
+    }
+    setIsLoadingSupplies(true);
+    listMasters<SupplyMaster>("supplies", session.accessToken, "", 1, 100)
+      .then((response) => setSupplyOptions(response.items))
+      .catch((err) => setError(err instanceof Error ? err.message : "No se pudieron cargar los avíos."))
+      .finally(() => setIsLoadingSupplies(false));
+  }, [resource, session]);
+
+  function getGeoField(field: FieldConfig): FieldConfig {
+    if (field.name === "province") {
+      return { ...field, options: [{ label: "Seleccionar provincia", value: "" }, ...ARGENTINA_PROVINCES.map((province) => ({ label: province.name, value: province.name }))] };
+    }
+    if (field.name === "district") {
+      return {
+        ...field,
+        disabled: !form.province || isLoadingDistricts,
+        loadingLabel: isLoadingDistricts ? "Cargando partidos" : "Seleccionar partido",
+        options: [{ label: isLoadingDistricts ? "Cargando partidos" : "Seleccionar partido", value: "" }, ...districtOptions.map((district) => ({ label: district.name, value: district.name }))],
+      };
+    }
+    if (field.name === "locality") {
+      return {
+        ...field,
+        disabled: !form.province || !form.district || isLoadingLocalities,
+        loadingLabel: isLoadingLocalities ? "Cargando localidades" : "Seleccionar localidad",
+        options: [{ label: isLoadingLocalities ? "Cargando localidades" : "Seleccionar localidad", value: "" }, ...localityOptions.map((locality) => ({ label: locality.name, value: locality.name }))],
+      };
+    }
+    return field;
+  }
+
   function setValue(name: string, value: string) {
-    setForm((current) => ({ ...current, [name]: value }));
+    if (["province", "district", "locality", "street", "streetNumber"].includes(name)) {
+      setAddressWarning("");
+    }
+    setForm((current) => {
+      if (name === "province") {
+        return { ...current, province: value, district: "", locality: "" };
+      }
+      if (name === "district") {
+        return { ...current, district: value, locality: "" };
+      }
+      return { ...current, [name]: value };
+    });
   }
 
   function setContactValue(id: string, name: keyof Omit<ContactRow, "id">, value: string) {
@@ -176,6 +346,34 @@ export default function NewManagementResourcePage() {
 
   function removeContact(id: string) {
     setContactRows((current) => (current.length > 1 ? current.filter((row) => row.id !== id) : current));
+  }
+
+
+  function setArticleSupplyValue(id: string, name: keyof Omit<ArticleSupplyRow, "id">, value: string) {
+    setArticleSupplyRows((current) => current.map((row) => (row.id === id ? { ...row, [name]: value } : row)));
+  }
+
+  function addArticleSupply() {
+    setArticleSupplyRows((current) => [...current, createArticleSupplyRow()]);
+  }
+
+  function removeArticleSupply(id: string) {
+    setArticleSupplyRows((current) => (current.length > 1 ? current.filter((row) => row.id !== id) : current));
+  }
+
+  function setDecorationValue(kind: DecorationType, id: string, name: keyof Omit<DecorationRow, "id">, value: string) {
+    const setter = kind === "BORDADO" ? setEmbroideryRows : setPrintingRows;
+    setter((current) => current.map((row) => (row.id === id ? { ...row, [name]: value } : row)));
+  }
+
+  function addDecoration(kind: DecorationType) {
+    const setter = kind === "BORDADO" ? setEmbroideryRows : setPrintingRows;
+    setter((current) => [...current, createDecorationRow()]);
+  }
+
+  function removeDecoration(kind: DecorationType, id: string) {
+    const setter = kind === "BORDADO" ? setEmbroideryRows : setPrintingRows;
+    setter((current) => (current.length > 1 ? current.filter((row) => row.id !== id) : current));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -191,7 +389,34 @@ export default function NewManagementResourcePage() {
     }
     setIsSaving(true);
     try {
-      const payloadForm = usesContacts ? { ...form, contacts: encodeContacts(contactRows) } : form;
+      if (usesContacts) {
+        setIsValidatingAddress(true);
+        const validation = await validateStreetAddress({
+          province: form.province ?? "",
+          department: form.district ?? "",
+          locality: form.locality ?? "",
+          street: form.street ?? "",
+          streetNumber: form.streetNumber ?? "",
+        });
+        setIsValidatingAddress(false);
+
+        if (validation.status === "invalid") {
+          setError(validation.message ?? "No se pudo validar la dirección.");
+          return;
+        }
+        setAddressWarning(validation.status === "warning" ? validation.message ?? "La dirección se guardará sin validar la altura." : "");
+      }
+
+      const payloadForm = resource === "articles"
+        ? {
+            ...form,
+            supplies: encodeArticleSupplies(articleSupplyRows),
+            decorationParts: JSON.stringify([
+              ...JSON.parse(encodeDecorations(embroideryRows, "BORDADO")),
+              ...JSON.parse(encodeDecorations(printingRows, "ESTAMPADO")),
+            ]),
+          }
+        : usesContacts ? { ...form, contacts: encodeContacts(contactRows) } : form;
       await createMaster(resource, session.accessToken, buildPayload(resource, payloadForm, false));
       router.push(`/gestion/${resource}`);
     } catch (err) {
@@ -204,6 +429,7 @@ export default function NewManagementResourcePage() {
       }
     } finally {
       setIsSaving(false);
+      setIsValidatingAddress(false);
     }
   }
 
@@ -220,9 +446,25 @@ export default function NewManagementResourcePage() {
         <section className={styles.formPanel} aria-label={`Alta de ${resourceMeta.singular}`}>
           <div className={styles.fieldsGrid}>
             {fields.map((field) => (
-              <Field key={field.name} field={field} value={form[field.name] ?? ""} onChange={setValue} />
+              <Field key={field.name} field={getGeoField(field)} value={form[field.name] ?? ""} onChange={setValue} />
             ))}
           </div>
+
+          {resource === "articles" ? (
+            <ArticleDetails
+              supplyRows={articleSupplyRows}
+              supplyOptions={supplyOptions}
+              isLoadingSupplies={isLoadingSupplies}
+              embroideryRows={embroideryRows}
+              printingRows={printingRows}
+              onSupplyChange={setArticleSupplyValue}
+              onAddSupply={addArticleSupply}
+              onRemoveSupply={removeArticleSupply}
+              onDecorationChange={setDecorationValue}
+              onAddDecoration={addDecoration}
+              onRemoveDecoration={removeDecoration}
+            />
+          ) : null}
 
           {usesContacts ? (
             <section className={styles.contactSection}>
@@ -234,13 +476,12 @@ export default function NewManagementResourcePage() {
                       <span>{`Contacto ${index + 1}`}</span>
                       {index > 0 ? <button type="button" onClick={() => removeContact(contact.id)}>Quitar</button> : null}
                     </div>
-                    <div className={styles.fieldsGrid}>
+                    <div className={resource === "clients" || resource === "providers" ? styles.contactFieldsGrid : styles.contactFieldsGridCompact}>
                       <ContactField label="Nombre" value={contact.contactName} onChange={(value) => setContactValue(contact.id, "contactName", value)} />
-                      <ContactField label="Email" type="email" value={contact.email} onChange={(value) => setContactValue(contact.id, "email", value)} />
-                      <ContactField label="Teléfono fijo" value={contact.fixedPhone} onChange={(value) => setContactValue(contact.id, "fixedPhone", value)} />
-                      <ContactField label="Celular 1" value={contact.mobilePhone1} onChange={(value) => setContactValue(contact.id, "mobilePhone1", value)} />
-                      <ContactField label="Celular 2" value={contact.mobilePhone2} onChange={(value) => setContactValue(contact.id, "mobilePhone2", value)} />
-                      <ContactField label="Nota" value={contact.roleNote} onChange={(value) => setContactValue(contact.id, "roleNote", value)} />
+                      {resource === "clients" || resource === "providers" ? (
+                        <ContactField label="Puesto" value={contact.roleNote} onChange={(value) => setContactValue(contact.id, "roleNote", value)} />
+                      ) : null}
+                      <ContactField label="Celular" value={contact.mobilePhone1} onChange={(value) => setContactValue(contact.id, "mobilePhone1", value)} />
                     </div>
                   </div>
                 ))}
@@ -249,17 +490,130 @@ export default function NewManagementResourcePage() {
             </section>
           ) : null}
 
+          {addressWarning ? <p className={styles.warning}>{addressWarning}</p> : null}
+          {geoError ? <p className={styles.error}>{geoError}</p> : null}
           {error ? <p className={styles.error}>{error}</p> : null}
 
           <div className={styles.actions}>
             <Link className={styles.secondaryAction} href={`/gestion/${resourceMeta.key}`}>Cancelar</Link>
-            <button className={styles.primaryAction} type="submit" disabled={isSaving || !isValidResource}>
-              {isSaving ? "Guardando..." : `Crear ${resourceMeta.singular.toLowerCase()}`}
+            <button className={styles.primaryAction} type="submit" disabled={isSaving || isValidatingAddress || !isValidResource}>
+              {isValidatingAddress ? "Validando dirección..." : isSaving ? "Guardando..." : `Crear ${resourceMeta.singular.toLowerCase()}`}
             </button>
           </div>
         </section>
       </form>
     </main>
+  );
+}
+
+
+function ArticleDetails({
+  supplyRows,
+  supplyOptions,
+  isLoadingSupplies,
+  embroideryRows,
+  printingRows,
+  onSupplyChange,
+  onAddSupply,
+  onRemoveSupply,
+  onDecorationChange,
+  onAddDecoration,
+  onRemoveDecoration,
+}: {
+  supplyRows: ArticleSupplyRow[];
+  supplyOptions: SupplyMaster[];
+  isLoadingSupplies: boolean;
+  embroideryRows: DecorationRow[];
+  printingRows: DecorationRow[];
+  onSupplyChange: (id: string, name: keyof Omit<ArticleSupplyRow, "id">, value: string) => void;
+  onAddSupply: () => void;
+  onRemoveSupply: (id: string) => void;
+  onDecorationChange: (kind: DecorationType, id: string, name: keyof Omit<DecorationRow, "id">, value: string) => void;
+  onAddDecoration: (kind: DecorationType) => void;
+  onRemoveDecoration: (kind: DecorationType, id: string) => void;
+}) {
+  return (
+    <section className={styles.articleSection}>
+      <div className={styles.articleBlockHeader}>
+        <h2>Avíos</h2>
+        <button className={styles.linkAction} type="button" onClick={onAddSupply}>+ Avío</button>
+      </div>
+      <div className={styles.articleRows}>
+        {supplyRows.map((row, index) => (
+          <div className={styles.supplyRow} key={row.id}>
+            <label className={styles.field}>
+              <span>{`Avío ${index + 1}`}</span>
+              <select value={row.supplyId} onChange={(event) => onSupplyChange(row.id, "supplyId", event.target.value)} disabled={isLoadingSupplies}>
+                <option value="">{isLoadingSupplies ? "Cargando avíos" : "Seleccionar avío"}</option>
+                {supplyOptions.map((supply) => (
+                  <option key={supply.id} value={supply.id}>{`${supply.code} - ${supply.name}`}</option>
+                ))}
+              </select>
+            </label>
+            <ContactField label="Cantidad" type="number" value={row.quantity} onChange={(value) => onSupplyChange(row.id, "quantity", value)} />
+            <ContactField label="Aclaración" value={row.note} onChange={(value) => onSupplyChange(row.id, "note", value)} />
+            <button className={styles.rowRemoveAction} type="button" onClick={() => onRemoveSupply(row.id)} disabled={supplyRows.length === 1}>Quitar</button>
+          </div>
+        ))}
+      </div>
+
+      <DecorationSection
+        title="Bordado"
+        kind="BORDADO"
+        rows={embroideryRows}
+        onChange={onDecorationChange}
+        onAdd={onAddDecoration}
+        onRemove={onRemoveDecoration}
+      />
+      <DecorationSection
+        title="Estampado"
+        kind="ESTAMPADO"
+        rows={printingRows}
+        onChange={onDecorationChange}
+        onAdd={onAddDecoration}
+        onRemove={onRemoveDecoration}
+      />
+    </section>
+  );
+}
+
+function DecorationSection({
+  title,
+  kind,
+  rows,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  title: string;
+  kind: DecorationType;
+  rows: DecorationRow[];
+  onChange: (kind: DecorationType, id: string, name: keyof Omit<DecorationRow, "id">, value: string) => void;
+  onAdd: (kind: DecorationType) => void;
+  onRemove: (kind: DecorationType, id: string) => void;
+}) {
+  return (
+    <section className={styles.decorationSection}>
+      <div className={styles.articleBlockHeader}>
+        <h2>{title}</h2>
+        <button className={styles.linkAction} type="button" onClick={() => onAdd(kind)}>{`+ ${title}`}</button>
+      </div>
+      <div className={styles.articleRows}>
+        {rows.map((row, index) => (
+          <div className={styles.decorationRow} key={row.id}>
+            <ContactField label={`Pieza ${index + 1}`} value={row.garmentPart} onChange={(value) => onChange(kind, row.id, "garmentPart", value)} />
+            <ContactField label="Ubicación" value={row.placement} onChange={(value) => onChange(kind, row.id, "placement", value)} />
+            <ContactField label="Código" value={row.decorationCode} onChange={(value) => onChange(kind, row.id, "decorationCode", value)} />
+            <ContactField label="Link imagen" type="url" value={row.imageUrl} onChange={(value) => onChange(kind, row.id, "imageUrl", value)} />
+            <label className={`${styles.field} ${styles.fullField}`}>
+              <span>Aclaraciones</span>
+              <input value={row.notes} onChange={(event) => onChange(kind, row.id, "notes", event.target.value)} />
+            </label>
+            <button className={styles.rowRemoveAction} type="button" onClick={() => onRemove(kind, row.id)} disabled={rows.length === 1}>Quitar</button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -269,7 +623,7 @@ function Field({ field, value, onChange }: { field: FieldConfig; value: string; 
     return (
       <label className={className}>
         <span>{field.label}</span>
-        <select value={value} onChange={(event) => onChange(field.name, event.target.value)} required={field.required}>
+        <select value={value} onChange={(event) => onChange(field.name, event.target.value)} required={field.required} disabled={field.disabled}>
           {(field.options ?? []).map((option) => <option key={option.value || option.label} value={option.value}>{option.label}</option>)}
         </select>
       </label>

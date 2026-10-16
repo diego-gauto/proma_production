@@ -218,6 +218,17 @@
   line-height: 1.45;
 }
 
+.warning {
+  margin-top: 18px;
+  border: 1px solid oklch(79% 0.15 83 / 44%);
+  border-radius: 8px;
+  background: oklch(79% 0.15 83 / 12%);
+  padding: 11px 12px;
+  color: oklch(86% 0.12 83);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -347,8 +358,16 @@
     padding: 18px 16px 28px;
   }
 
-  .fieldsGrid {
+  .fieldsGrid,
+  .contactFieldsGrid,
+  .contactFieldsGridCompact,
+  .supplyRow,
+  .decorationRow {
     grid-template-columns: 1fr;
+  }
+
+  .decorationRow .fullField {
+    grid-column: auto;
   }
 
   .sizeGrid {
@@ -546,6 +565,97 @@
   gap: 14px;
 }
 
+
+.contactFieldsGrid,
+.contactFieldsGridCompact {
+  display: grid;
+  gap: 16px;
+}
+
+.contactFieldsGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contactFieldsGridCompact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+
+.articleSection {
+  display: grid;
+  gap: 24px;
+  margin-top: 28px;
+  border-top: 1px solid oklch(29% 0.025 260);
+  padding-top: 24px;
+}
+
+.articleBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.articleBlockHeader h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.articleRows,
+.decorationSection {
+  display: grid;
+  gap: 14px;
+}
+
+.supplyRow,
+.decorationRow {
+  display: grid;
+  align-items: end;
+  gap: 12px;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 8px;
+  background: oklch(17% 0.017 260);
+  padding: 14px;
+}
+
+.supplyRow {
+  grid-template-columns: minmax(220px, 1.5fr) minmax(90px, 0.45fr) minmax(160px, 1fr) auto;
+}
+
+.decorationRow {
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+}
+
+.decorationRow .fullField {
+  grid-column: 1 / -2;
+}
+
+.rowRemoveAction {
+  min-height: 40px;
+  border: 1px solid oklch(29% 0.025 260);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 12px;
+  color: oklch(67% 0.025 255);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.rowRemoveAction:hover:not(:disabled) {
+  border-color: oklch(66% 0.22 34 / 70%);
+  color: oklch(84% 0.09 34);
+}
+
+.rowRemoveAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .contactHeader {
   display: flex;
   align-items: center;
@@ -557,6 +667,7 @@
 
 .contactHeader button,
 .linkAction {
+  justify-self: start;
   border: 0;
   background: transparent;
   padding: 0;

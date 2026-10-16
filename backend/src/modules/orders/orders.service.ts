@@ -6,10 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ILike, In, Repository } from 'typeorm';
+import { FindOptionsWhere, ILike, In, Repository } from 'typeorm';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { Article } from '../articles/entities/article.entity';
-import { SectorCode } from '../catalog/entities/catalog.enums';
+import { OrderFabricUseType, SectorCode } from '../catalog/entities/catalog.enums';
 import { Fabric } from '../catalog/entities/fabric.entity';
 import { SizeCurveValue } from '../catalog/entities/size-curve-value.entity';
 import { SizeCurve } from '../catalog/entities/size-curve.entity';
@@ -101,6 +101,7 @@ export class OrdersService {
           color: item.color ?? fabric.color ?? null,
           sizeCurveValue,
           quantityRequested: item.quantityRequested,
+          useType: item.useType ?? (itemFabric.id === fabric.id ? OrderFabricUseType.PRIMARIA : OrderFabricUseType.COMPLEMENTO),
         });
       }),
     );
@@ -141,15 +142,23 @@ export class OrdersService {
     return this.findOne(saved.id);
   }
 
-  async findAll(query: OrderQueryDto): Promise<PaginatedResponse<Order>> {
+  async findAll(
+    query: OrderQueryDto,
+    currentUser?: AuthenticatedUser,
+  ): Promise<PaginatedResponse<Order>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = query.search
+    const where: FindOptionsWhere<Order> | FindOptionsWhere<Order>[] = query.search
       ? [
           { internalCode: ILike(`%${query.search}%`) },
           { externalCode: ILike(`%${query.search}%`) },
         ]
       : {};
+
+    if (currentUser && !this.canSeeAllOrders(currentUser)) {
+      return this.findAllVisibleToSectorUser(where, page, limit, currentUser);
+    }
+
     const [items, total] = await this.ordersRepository.findAndCount({
       where,
       relations: this.orderRelations(),
@@ -161,7 +170,7 @@ export class OrdersService {
     return { items, total, page, limit };
   }
 
-  async findOne(id: string): Promise<Order> {
+  async findOne(id: string, currentUser?: AuthenticatedUser): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id },
       relations: this.orderRelations(true),
@@ -169,25 +178,46 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException('Orden no encontrada');
     }
+    if (currentUser && !this.canSeeAllOrders(currentUser)) {
+      if (!this.orderVisibleToUser(order, currentUser)) {
+        throw new ForbiddenException('No tenes permisos para ver esta orden');
+      }
+      order.parts = this.visiblePartsForUser(order, currentUser);
+    }
     return order;
   }
 
-  async findParts(orderId: string, query: OrderPartsQueryDto): Promise<OrderPart[]> {
-    await this.findOne(orderId);
+  async findParts(
+    orderId: string,
+    query: OrderPartsQueryDto,
+    currentUser?: AuthenticatedUser,
+  ): Promise<OrderPart[]> {
+    await this.findOne(orderId, currentUser);
     const where = query.stageId
       ? { order: { id: orderId }, currentStage: { id: query.stageId } }
       : { order: { id: orderId } };
-    return this.orderPartsRepository.find({
+    const parts = await this.orderPartsRepository.find({
       where,
       relations: {
         parentPart: true,
         currentStage: true,
         children: true,
         events: { stage: true, workshop: true },
+        cutLoads: { items: { sizeCurveValue: true }, fabricRoll: { entry: { fabric: true } } },
+        decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
         supplies: { supply: true },
       },
       order: { partCode: 'ASC' },
     });
+    if (!currentUser || this.canSeeAllOrders(currentUser)) {
+      return parts;
+    }
+    const visibleSectorSet = new Set(this.visibleSectors(currentUser));
+    return parts.filter(
+      (part) =>
+        part.currentStage?.code !== undefined &&
+        visibleSectorSet.has(part.currentStage.code),
+    );
   }
 
   async split(
@@ -371,6 +401,73 @@ export class OrdersService {
     return this.findOne(id);
   }
 
+
+  private async findAllVisibleToSectorUser(
+    where: FindOptionsWhere<Order> | FindOptionsWhere<Order>[],
+    page: number,
+    limit: number,
+    currentUser: AuthenticatedUser,
+  ): Promise<PaginatedResponse<Order>> {
+    const orders = await this.ordersRepository.find({
+      where,
+      relations: this.orderRelations(),
+      order: { createdAt: 'DESC' },
+    });
+    const visible = orders
+      .filter((order) => this.orderVisibleToUser(order, currentUser))
+      .map((order) => ({
+        ...order,
+        parts: this.visiblePartsForUser(order, currentUser),
+      })) as Order[];
+    const start = (page - 1) * limit;
+
+    return {
+      items: visible.slice(start, start + limit),
+      total: visible.length,
+      page,
+      limit,
+    };
+  }
+
+  private canSeeAllOrders(user: AuthenticatedUser): boolean {
+    if (user.role === UserRole.ADMIN) {
+      return true;
+    }
+    return (user.permissions ?? []).some(
+      (permission) =>
+        permission.isAllowed &&
+        permission.action === PermissionAction.VER &&
+        permission.sectorCode === null,
+    );
+  }
+
+  private visibleSectors(user: AuthenticatedUser): SectorCode[] {
+    return (user.permissions ?? [])
+      .filter(
+        (permission) =>
+          permission.isAllowed &&
+          permission.action === PermissionAction.VER &&
+          permission.sectorCode !== null,
+      )
+      .map((permission) => permission.sectorCode as SectorCode);
+  }
+
+  private orderVisibleToUser(order: Order, user: AuthenticatedUser): boolean {
+    return this.visiblePartsForUser(order, user).length > 0;
+  }
+
+  private visiblePartsForUser(order: Order, user: AuthenticatedUser): OrderPart[] {
+    const visibleSectorSet = new Set(this.visibleSectors(user));
+    if (visibleSectorSet.size === 0) {
+      return [];
+    }
+    return (order.parts ?? []).filter(
+      (part) =>
+        part.currentStage?.code !== undefined &&
+        visibleSectorSet.has(part.currentStage.code),
+    );
+  }
+
   private orderRelations(includeTree = false) {
     return {
       client: true,
@@ -389,10 +486,14 @@ export class OrdersService {
               children: true,
               currentStage: true,
               events: { stage: true, workshop: true },
+              cutLoads: { items: { sizeCurveValue: true }, fabricRoll: { entry: { fabric: true } } },
+              decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
               supplies: { supply: true },
             }
           : true,
         events: { stage: true, workshop: true },
+        cutLoads: { items: { sizeCurveValue: true }, fabricRoll: { entry: { fabric: true } } },
+        decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
         supplies: { supply: true },
       },
     } as const;
@@ -486,6 +587,8 @@ export class OrdersService {
         currentStage: true,
         children: true,
         events: { stage: true, workshop: true },
+        cutLoads: { items: { sizeCurveValue: true }, fabricRoll: { entry: { fabric: true } } },
+        decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
         supplies: { supply: true },
       },
     });
@@ -506,6 +609,8 @@ export class OrdersService {
         sizeCurveValue: true,
         currentStage: true,
         events: { stage: true, workshop: true },
+        cutLoads: { items: { sizeCurveValue: true }, fabricRoll: { entry: { fabric: true } } },
+        decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
         supplies: { supply: true },
       },
       order: { partCode: 'ASC' },

@@ -1,1 +1,7 @@
-export { default } from "../../page";
+"use client";
+
+import Home from "../../page";
+
+export default function ManagementResourcePage() {
+  return <Home />;
+}

@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { OrderPart } from '../../orders/entities/order-part.entity';
 import { OrderRequestedItem } from '../../orders/entities/order-requested-item.entity';
-import { FabricFormatType, FabricWeaveType } from './catalog.enums';
+import { FabricConsumptionUnit, FabricFormatType, FabricWeaveType } from './catalog.enums';
 
 @Entity('fabrics')
 export class Fabric {
@@ -32,6 +32,9 @@ export class Fabric {
 
   @Column({ name: 'format_type', type: 'enum', enum: FabricFormatType, enumName: 'fabric_format_type' })
   formatType!: FabricFormatType;
+
+  @Column({ name: 'consumption_unit', type: 'enum', enum: FabricConsumptionUnit, enumName: 'fabric_consumption_unit', default: FabricConsumptionUnit.METROS })
+  consumptionUnit!: FabricConsumptionUnit;
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;

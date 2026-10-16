@@ -29,6 +29,78 @@
           "action": "FORZAR_CAMBIO"
         }
       ]
+    },
+    {
+      "fullName": "Responsable Corte Demo",
+      "email": "responsable.corte@demo.proma.local",
+      "role": "USER",
+      "permissions": [
+        {
+          "sectorCode": "CORTE",
+          "action": "VER"
+        },
+        {
+          "sectorCode": "CORTE",
+          "action": "FINALIZAR_ETAPA"
+        }
+      ]
+    },
+    {
+      "fullName": "Responsable Bordado Demo",
+      "email": "responsable.bordado@demo.proma.local",
+      "role": "USER",
+      "permissions": [
+        {
+          "sectorCode": "BORDADO",
+          "action": "VER"
+        },
+        {
+          "sectorCode": "BORDADO",
+          "action": "FINALIZAR_ETAPA"
+        }
+      ]
+    },
+    {
+      "fullName": "Responsable Estampado Demo",
+      "email": "responsable.estampado@demo.proma.local",
+      "role": "USER",
+      "permissions": [
+        {
+          "sectorCode": "ESTAMPADO",
+          "action": "VER"
+        },
+        {
+          "sectorCode": "ESTAMPADO",
+          "action": "INICIAR_ETAPA"
+        },
+        {
+          "sectorCode": "ESTAMPADO",
+          "action": "FINALIZAR_ETAPA"
+        }
+      ]
+    },
+    {
+      "fullName": "Responsable Avíos Demo",
+      "email": "avios@demo.proma.local",
+      "role": "USER",
+      "permissions": [
+        {
+          "sectorCode": "AVIOS_CONFECCION",
+          "action": "VER"
+        },
+        {
+          "sectorCode": "AVIOS_CONFECCION",
+          "action": "EDITAR"
+        },
+        {
+          "sectorCode": "AVIOS_TERMINACION",
+          "action": "VER"
+        },
+        {
+          "sectorCode": "AVIOS_TERMINACION",
+          "action": "EDITAR"
+        }
+      ]
     }
   ],
   "clients": [
@@ -205,6 +277,54 @@
           "estimatedDaysOffset": 2
         }
       ]
+    },
+    {
+      "externalCode": "DEMO-ORDEN-007",
+      "internalCode": "DEMO-OC-007",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "S",
+      "quantity": 36,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "BORDADO",
+      "executionType": "INTERNO"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-008",
+      "internalCode": "DEMO-OC-008",
+      "clientTaxId": "DEMO-CLIENTE-2",
+      "articleCode": "DEMO-ART-PANTALON",
+      "fabricCode": "DEMO-TELA-RIPSTOP",
+      "sizeLabel": "M",
+      "quantity": 28,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "ESTAMPADO",
+      "executionType": "INTERNO"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-009",
+      "internalCode": "DEMO-OC-009",
+      "clientTaxId": "DEMO-CLIENTE-1",
+      "articleCode": "DEMO-ART-CAMPERA",
+      "fabricCode": "DEMO-TELA-GABARDINA",
+      "sizeLabel": "L",
+      "quantity": 22,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "BORDADO",
+      "executionType": "INTERNO"
+    },
+    {
+      "externalCode": "DEMO-ORDEN-010",
+      "internalCode": "DEMO-OC-010",
+      "clientTaxId": "DEMO-CLIENTE-2",
+      "articleCode": "DEMO-ART-PANTALON",
+      "fabricCode": "DEMO-TELA-RIPSTOP",
+      "sizeLabel": "S",
+      "quantity": 18,
+      "partStatus": "EN_PROCESO",
+      "stageCode": "ESTAMPADO",
+      "executionType": "INTERNO"
     }
   ]
 }

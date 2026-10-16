@@ -74,6 +74,8 @@ Login individual por usuario. Los roles agrupan permisos, pero el acceso real se
 - **S9**: El artículo representa el producto a cortar. No tiene tela ni curva asociada de forma fija. La tela, curva, cantidades por talle, cliente y taller/ubicación se definen en la Orden de Corte.
 - **S10**: El artículo sí mantiene una lista de avíos que normalmente lleva el producto y una lista de partes de prenda que pueden bordarse o estamparse. Estos datos ayudan a crear la orden y a preparar checklists, pero no implican stock real.
 - **S11**: Los permisos no se resuelven solo por rol. Cada usuario puede tener permisos personalizados por sector y acción; los roles funcionan como plantillas o agrupadores iniciales.
+- **S12 (confirmado 2026-10-14)**: Todas las partes de Bordado y Estampado configuradas en el artículo son obligatorias. No se selecciona un subconjunto al crear la orden: una combinación distinta requiere otro artículo. Cada sector muestra una separación por parte de prenda y registra lotes con fecha y cantidades por talle. La etapa solo finaliza cuando todas sus partes requeridas están completas; Estampado aplica únicamente si el artículo lo incluye.
+
 
 ---
 
@@ -652,7 +654,12 @@ CREATE TABLE system_settings (
 6. **Cuello de botella**: se calcula por cron job (ver §6.6) sobre partes con `status = 'EN_PROCESO'` cuyo evento activo tiene `started_at` más antiguo que `system_settings.bottleneck_threshold_days`, **excluyendo** `stages.excluded_from_bottleneck_alerts = true` (Confección).
 7. **Fecha estimada incumplida**: cron diario compara `estimated_finish_at < now()` en eventos sin `finished_at` y `overdue_notified = false`; dispara notificación y marca `overdue_notified = true` para no duplicar.
 8. **Finalización de la Orden**: una `order` pasa a `status = 'FINALIZADA'` cuando **todas** sus `order_parts` hoja activas alcanzaron `status = 'FINALIZADA'` en la etapa Terminación. Para este cálculo se excluyen partes con `status IN ('DIVIDIDA','REINTEGRADA')`, ramas `COMPONENTE` ya reunificadas y cualquier parte apuntada por `recombined_into_part_id`. Esta lógica vive en el servicio al cerrar cada evento de Terminación, no en un trigger de base de datos.
-9. **Avíos**: `part_supplies.completeness` es informativo; no bloquea el avance de etapa en el MVP (el usuario puede avanzar igual con avíos parciales, según lo definido por el negocio).
+9. **Avíos (confirmado 2026-10-15)**: la preparación es paralela al recorrido productivo y no abre otro `part_stage_events` ni impide iniciar sectores. Confección no puede finalizar sin sus avíos de confección; Terminación no puede finalizar sin sus avíos de terminación. Plancha no requiere avíos. Ojal y Botón puede iniciar, pero necesita sus botones para finalizar; está pendiente confirmar cómo se identifica esa dependencia en el catálogo (marca explícita propuesta al usuario), por lo que ese control específico todavía no está implementado.
+   - La vista separa **Avíos de confección / Avíos de terminación** y muestra **Para preparar, En preparación, Incompletos y Terminados**.
+   - Cantidad total = cantidad por prenda × prendas de la parte. La cantidad preparada es acumulada, no un incremento; los sobrantes son válidos y marcan completo automáticamente.
+   - Una cantidad inferior requiere Parcial o Faltante. La preparación permanece incompleta hasta cubrir todos los avíos de la categoría.
+   - La preparación se registra en `part_supplies`, con usuario y fecha. Iniciar preparación registra responsable sin cantidad; no mueve la orden de sector.
+   - Compatibilidad: un evento secuencial antiguo de Avíos se cierra al iniciar otro sector, con nota explícita de traslado al checklist paralelo; ese cierre no declara completa la preparación.
 10. **Atraque nunca es una etapa tercerizada de forma independiente** (no tiene `workshop_id` propio; `stages.execution_type` para ATRAQUE es siempre `'INTERNO'`). Su ejecución depende exclusivamente de lo que pase en el evento de Confección de esa misma parte:
    - Si Confección fue `EXTERNO` y al finalizarla el usuario marca `includes_atraque = true` (el taller entregó la prenda ya atracada): el servicio **auto-genera** un `part_stage_events` de ATRAQUE para esa parte con `started_at = finished_at = now()`, `execution_type = 'INTERNO'`, `note = 'Incluido en Confección — Taller: <nombre>'`, `performed_by` = el mismo usuario que finalizó Confección. La parte avanza directo a la siguiente etapa (Ojal y Botón u otra según corresponda) sin que nadie del sector Atraque tenga que actuar.
    - Si Confección fue `EXTERNO` con `includes_atraque = false`, o si Confección fue `INTERNO`, y el artículo requiere atraque: la parte queda pendiente en la etapa ATRAQUE normalmente, y el sector Atraque interno la procesa con su propio `start`/`finish` como cualquier otra etapa interna.
@@ -1205,6 +1212,16 @@ export class RolesGuard implements CanActivate {
 | POST | `/order-parts/recombine` | Sí (Corte/Bordado/Estampado/Avíos según etapa de las ramas) / Admin | `RecombinePartsDto` | `OrderPart` (nueva parte reunificada lista para Confección/Avíos según flujo) |
 | GET | `/order-parts/:id/supplies` | Sí | — | `PartSupply[]` |
 | PATCH | `/order-parts/:id/supplies/:supplyId` | Sí (sector Avíos) / Admin | `{ completeness, quantityAvailable, note }` | `PartSupply` |
+
+### 6.8.1 Preparación paralela de Avíos
+
+| Método | Endpoint | Acceso | Datos |
+|---|---|---|---|
+| GET | `/supply-preparations` | Admin o `VER` para la categoría | `category=CONFECCION/TERMINACION`, `search`, `page`, `limit`; órdenes con avíos, estado y totales calculados |
+| GET | `/supply-preparations/:orderId` | Admin o `VER` para la categoría | `category`; detalle sin depender de la etapa productiva actual |
+| PATCH | `/supply-preparations/:partId` | Admin o `EDITAR` para la categoría | `{ category, action: START/SAVE, items: [{ supplyId, quantityAvailable, completeness }] }`; guardado transaccional |
+
+La vista usa `/avios` y `/avios/:orderId`. El catálogo de etapas productivas no ofrece Avíos como destino secuencial.
 
 ### 6.9 Eventos de etapa (acción central: iniciar/finalizar)
 

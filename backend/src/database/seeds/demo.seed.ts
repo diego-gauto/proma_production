@@ -62,6 +62,7 @@ export async function seedDemoData(dataSource: DataSource): Promise<void> {
   const demoData = loadDemoData();
   await dataSource.transaction(async (manager) => {
     const passwordHash = await bcrypt.hash(demoData.password, 10);
+    await dataSource.manager.query(`UPDATE users SET is_active = false WHERE email IN ('avios_confeccion@demo.proma.local', 'avios_terminacion@demo.proma.local')`);
     const usersByEmail = new Map<string, IdRow>();
 
     for (const user of demoData.users) {
@@ -78,7 +79,7 @@ export async function seedDemoData(dataSource: DataSource): Promise<void> {
       );
     }
 
-    for (const sector of Object.values(SectorCode)) {
+    for (const sector of Object.values(SectorCode).filter(code => code !== SectorCode.AVIOS_CONFECCION && code !== SectorCode.AVIOS_TERMINACION)) {
       await upsertUser(
         manager,
         `Sector ${sector}`,
@@ -322,16 +323,21 @@ async function upsertArticle(manager: DataSource['manager'], code: string, name:
       [articleId, supply.id],
     );
   }
-  await manager.query(
-    `
-      INSERT INTO article_decoration_parts (article_id, garment_part, decoration_type)
-      SELECT $1, 'Pecho', 'BORDADO'
-      WHERE NOT EXISTS (
-        SELECT 1 FROM article_decoration_parts WHERE article_id = $1 AND garment_part = 'Pecho'
-      )
-    `,
-    [articleId],
-  );
+  const decorations = code === 'DEMO-ART-CAMPERA'
+    ? [['Pecho', 'BORDADO'], ['Manga', 'BORDADO']]
+    : [['Frente', 'ESTAMPADO'], ['Espalda', 'ESTAMPADO']];
+  for (const [garmentPart, decorationType] of decorations) {
+    await manager.query(
+      `
+        INSERT INTO article_decoration_parts (article_id, garment_part, decoration_type)
+        SELECT $1, $2::varchar, $3::varchar
+        WHERE NOT EXISTS (
+          SELECT 1 FROM article_decoration_parts WHERE article_id = $1 AND garment_part = $2::varchar AND decoration_type = $3::varchar
+        )
+      `,
+      [articleId, garmentPart, decorationType],
+    );
+  }
   return { id: articleId };
 }
 
@@ -438,6 +444,24 @@ async function ensureOrder(
       );
     }
     return;
+  }
+
+  if (stage && (input.stageCode === SectorCode.BORDADO || input.stageCode === SectorCode.ESTAMPADO)) {
+    const corteStage = (await manager.query('SELECT id FROM stages WHERE code = $1', [SectorCode.CORTE]))[0] as NumericIdRow;
+    const corteEvent = (await manager.query(
+      `INSERT INTO part_stage_events (order_part_id, stage_id, execution_type, started_at, finished_at, performed_by)
+       VALUES ($1, $2, $3, now() - interval '4 days', now() - interval '2 days', $4) RETURNING id`,
+      [partRows[0].id, corteStage.id, StageExecutionType.INTERNO, input.createdById],
+    ))[0] as IdRow;
+    const cutLoad = (await manager.query(
+      `INSERT INTO part_cut_loads (order_part_id, stage_event_id, lot_code, created_by)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [partRows[0].id, corteEvent.id, 'Demo corte completo', input.createdById],
+    ))[0] as IdRow;
+    await manager.query(
+      `INSERT INTO part_cut_load_items (cut_load_id, size_curve_value_id, quantity) VALUES ($1, $2, $3)`,
+      [cutLoad.id, input.sizeValueId, input.quantity],
+    );
   }
 
   if (stage) {

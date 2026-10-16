@@ -22,8 +22,8 @@ export class OrdersController {
   }
 
   @Get()
-  findAll(@Query() query: OrderQueryDto) {
-    return this.ordersService.findAll(query);
+  findAll(@Query() query: OrderQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.findAll(query, user);
   }
 
 
@@ -39,12 +39,16 @@ export class OrdersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ordersService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.findOne(id, user);
   }
 
   @Get(':orderId/parts')
-  findParts(@Param('orderId') orderId: string, @Query() query: OrderPartsQueryDto) {
-    return this.ordersService.findParts(orderId, query);
+  findParts(
+    @Param('orderId') orderId: string,
+    @Query() query: OrderPartsQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.findParts(orderId, query, user);
   }
 }

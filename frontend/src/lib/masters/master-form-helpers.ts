@@ -10,6 +10,7 @@ import {
   UserMaster,
   WorkshopMaster,
 } from "../api/masters.api";
+import { DEFAULT_PROVINCE } from "../geo/argentina";
 
 export type MasterItem =
   | ClientMaster
@@ -48,10 +49,16 @@ export function initialForm(resource: MasterName, item: MasterItem | null): Form
     return {
       businessName: provider?.businessName ?? "",
       taxId: provider?.taxId ?? "",
+      businessSector: provider?.businessSector ?? "",
+      email: provider?.email ?? "",
+      fixedPhone: provider?.fixedPhone ?? "",
+      street: provider?.street ?? "",
+      streetNumber: provider?.streetNumber ?? "",
+      floorApartment: provider?.floorApartment ?? "",
       address: provider?.address ?? "",
       locality: provider?.locality ?? "",
       district: provider?.district ?? "",
-      province: provider?.province ?? "",
+      province: provider?.province ?? DEFAULT_PROVINCE,
       contacts: formatContactsInput(provider?.contacts),
     };
   }
@@ -69,10 +76,15 @@ export function initialForm(resource: MasterName, item: MasterItem | null): Form
     const workshop = item as WorkshopMaster | null;
     return {
       name: workshop?.name ?? "",
+      email: workshop?.email ?? "",
+      fixedPhone: workshop?.fixedPhone ?? "",
+      street: workshop?.street ?? "",
+      streetNumber: workshop?.streetNumber ?? "",
+      floorApartment: workshop?.floorApartment ?? "",
       address: workshop?.address ?? "",
       locality: workshop?.locality ?? "",
       district: workshop?.district ?? "",
-      province: workshop?.province ?? "",
+      province: workshop?.province ?? DEFAULT_PROVINCE,
       specialties: workshop?.specialties.join(", ") ?? "",
       specialtyDetail: workshop?.specialtyDetail ?? "",
       contacts: formatContactsInput(workshop?.contacts),
@@ -121,6 +133,12 @@ export function initialForm(resource: MasterName, item: MasterItem | null): Form
   return {
     businessName: client?.businessName ?? "",
     taxId: client?.taxId ?? "",
+    businessSector: client?.businessSector ?? "",
+    email: client?.email ?? "",
+    fixedPhone: client?.fixedPhone ?? "",
+    street: client?.street ?? "",
+    streetNumber: client?.streetNumber ?? "",
+    floorApartment: client?.floorApartment ?? "",
     address: client?.address ?? "",
     locality: client?.locality ?? "",
     district: client?.district ?? "",
@@ -134,6 +152,12 @@ export function buildPayload(resource: MasterName, form: FormState, isEditing: b
     return compact({
       businessName: form.businessName,
       taxId: form.taxId,
+      businessSector: form.businessSector,
+      email: form.email,
+      fixedPhone: form.fixedPhone,
+      street: form.street,
+      streetNumber: form.streetNumber,
+      floorApartment: form.floorApartment,
       address: form.address,
       locality: form.locality,
       district: form.district,
@@ -153,6 +177,11 @@ export function buildPayload(resource: MasterName, form: FormState, isEditing: b
   if (resource === "workshops") {
     return compact({
       name: form.name,
+      email: form.email,
+      fixedPhone: form.fixedPhone,
+      street: form.street,
+      streetNumber: form.streetNumber,
+      floorApartment: form.floorApartment,
       address: form.address,
       locality: form.locality,
       district: form.district,
@@ -200,6 +229,12 @@ export function buildPayload(resource: MasterName, form: FormState, isEditing: b
   return compact({
     businessName: form.businessName,
     taxId: form.taxId,
+    businessSector: form.businessSector,
+    email: form.email,
+    fixedPhone: form.fixedPhone,
+    street: form.street,
+    streetNumber: form.streetNumber,
+    floorApartment: form.floorApartment,
     address: form.address,
     locality: form.locality,
     district: form.district,
@@ -218,8 +253,8 @@ export function splitComma(value: string): string[] {
 
 export function parseContacts(value: string) {
   return value.split(";").map((entry) => entry.trim()).filter(Boolean).map((entry, index) => {
-    const [contactName, email, fixedPhone, mobilePhone1, mobilePhone2, roleNote] = entry.split("|").map((part) => part.trim());
-    return compact({ contactName, email, fixedPhone, mobilePhone1, mobilePhone2, roleNote, isPrimary: index === 0 });
+    const [contactName, mobilePhone1, roleNote] = entry.split("|").map((part) => part.trim());
+    return compact({ contactName, mobilePhone1, roleNote, isPrimary: index === 0 });
   });
 }
 
@@ -236,6 +271,15 @@ export function parsePermissions(value: string) {
 }
 
 export function parseArticleSupplies(value: string) {
+  const structured = parseJsonArray(value);
+  if (structured) {
+    return structured.map((entry) => compact({
+      supplyId: stringValue(entry.supplyId),
+      quantity: numberValue(entry.quantity),
+      note: stringValue(entry.note),
+    })).filter((entry) => entry.supplyId);
+  }
+
   return value.split(";").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
     const [supplyId, quantity, note] = entry.split("|").map((part) => part.trim());
     return compact({ supplyId, quantity: quantity ? Number(quantity) : undefined, note });
@@ -243,19 +287,52 @@ export function parseArticleSupplies(value: string) {
 }
 
 export function parseDecorationParts(value: string) {
+  const structured = parseJsonArray(value);
+  if (structured) {
+    return structured.map((entry) => compact({
+      garmentPart: stringValue(entry.garmentPart),
+      decorationType: stringValue(entry.decorationType),
+      placement: stringValue(entry.placement),
+      decorationCode: stringValue(entry.decorationCode),
+      imageUrl: stringValue(entry.imageUrl),
+      notes: stringValue(entry.notes),
+    })).filter((entry) => entry.garmentPart && entry.decorationType);
+  }
+
   return value.split(";").map((entry) => entry.trim()).filter(Boolean).map((entry) => {
     const [garmentPart, decorationType] = entry.split(":").map((part) => part.trim());
     return { garmentPart, decorationType };
   }).filter((part) => part.garmentPart && part.decorationType);
 }
 
+function parseJsonArray(value: string): Record<string, unknown>[] | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("[")) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
 export function formatContactsInput(contacts?: ContactMaster[]): string {
   return (contacts ?? []).map((contact) => [
     contact.contactName,
-    contact.email ?? "",
-    contact.fixedPhone ?? "",
     contact.mobilePhone1 ?? "",
-    contact.mobilePhone2 ?? "",
     contact.roleNote ?? "",
   ].join("|")).join("; ");
 }
@@ -274,6 +351,13 @@ export function formatArticleSuppliesInput(supplies?: { quantity?: string | null
   return (supplies ?? []).map((entry) => [entry.supply?.id ?? "", entry.quantity ?? "", entry.note ?? ""].join("|")).join("; ");
 }
 
-export function formatDecorationInput(parts?: { garmentPart: string; decorationType: string }[]): string {
-  return (parts ?? []).map((part) => `${part.garmentPart}:${part.decorationType}`).join("; ");
+export function formatDecorationInput(parts?: { garmentPart: string; decorationType: string; placement?: string | null; decorationCode?: string | null; imageUrl?: string | null; notes?: string | null }[]): string {
+  return JSON.stringify((parts ?? []).map((part) => ({
+    garmentPart: part.garmentPart,
+    decorationType: part.decorationType,
+    placement: part.placement ?? "",
+    decorationCode: part.decorationCode ?? "",
+    imageUrl: part.imageUrl ?? "",
+    notes: part.notes ?? "",
+  })));
 }

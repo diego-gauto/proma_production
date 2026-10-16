@@ -18,6 +18,21 @@ export class Workshop {
   @Column({ name: 'name', type: 'varchar', length: 180 })
   name!: string;
 
+  @Column({ name: 'email', type: 'varchar', length: 150, nullable: true })
+  email?: string | null;
+
+  @Column({ name: 'fixed_phone', type: 'varchar', length: 50, nullable: true })
+  fixedPhone?: string | null;
+
+  @Column({ name: 'street', type: 'varchar', length: 180, nullable: true })
+  street?: string | null;
+
+  @Column({ name: 'street_number', type: 'varchar', length: 30, nullable: true })
+  streetNumber?: string | null;
+
+  @Column({ name: 'floor_apartment', type: 'varchar', length: 60, nullable: true })
+  floorApartment?: string | null;
+
   @Column({ name: 'address', type: 'varchar', length: 255, nullable: true })
   address?: string | null;
 

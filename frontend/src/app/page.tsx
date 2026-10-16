@@ -1,5 +1,6 @@
 "use client";
 
+import { SupplyWorkspace, isSupplySectorUser } from "../components/ordenes/SupplyWorkspace/SupplyWorkspace";
 import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "../components/ui/Button/Button";
@@ -61,6 +62,7 @@ import {
 } from "../lib/api/orders.api";
 import { formatList } from "../lib/formatters/master-formatters";
 import styles from "./page.module.css";
+import cutStyles from "./ordenes/CorteSector.module.css";
 
 type MasterItem =
   | ClientMaster
@@ -410,14 +412,37 @@ export default function Home() {
     );
   }
 
+  if (isSupplySectorUser(session) && (mainView === "orders" || mainView === "sectors")) {
+    return <SupplyWorkspace session={session} />;
+  }
+
+  const canSeeGlobalProduction = session.user.role === "ADMIN" || Boolean(session.user.permissions?.some((permission) => permission.isAllowed && permission.sectorCode === null));
   const canManageCatalogs = session.user.role === "ADMIN" || Boolean(session.user.permissions?.some((permission) => permission.isAllowed && permission.action === "ADMINISTRAR"));
   const visibleResources = canManageCatalogs ? resources : [];
+  const cutSectorUser = isSectorOnlyUser(session, "CORTE");
+  const decorationSector = isSectorOnlyUser(session, "BORDADO") ? "Bordado" : isSectorOnlyUser(session, "ESTAMPADO") ? "Estampado" : undefined;
+
+  if ((cutSectorUser || decorationSector) && (mainView === "orders" || mainView === "sectors")) {
+    return (
+      <CutSectorOrdersPage
+        stageName={decorationSector ?? "Corte"}
+        orders={orders}
+        search={search}
+        onSearchChange={setSearch}
+        onSearchSubmit={() => void loadOrders()}
+        onOpen={(orderCode) => router.push(`/ordenes/${encodeURIComponent(orderCode)}`)}
+        userFullName={session.user.fullName}
+      />
+    );
+  }
 
   return (
     <main className={styles.page}>
       <AppTopBar
         activeSection={mainView}
         canShowManagement={visibleResources.length > 0}
+        canShowSectors={canSeeGlobalProduction}
+        canShowStock={canSeeGlobalProduction}
         onNavigate={handleTopBarNavigation}
         searchValue={search}
         onSearchChange={setSearch}
@@ -471,6 +496,7 @@ export default function Home() {
           </div>
           {mainView === "sectors" ? (
             <div className={styles.viewToggle}>
+              <button type="button" onClick={() => router.push("/avios")}>Avíos</button>
               <button
                 type="button"
                 className={sectorDisplayMode === "list" ? styles.toggleActive : ""}
@@ -937,6 +963,219 @@ function StockDetailModal({
 
 function formatQuantity(value: number): string {
   return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value);
+}
+
+
+function isSectorOnlyUser(session: LoginResponse, sectorCode: string): boolean {
+  if (session.user.role === "ADMIN") return false;
+  const allowedSectors = new Set(
+    (session.user.permissions ?? [])
+      .filter((permission) => permission.isAllowed && permission.action === "VER" && permission.sectorCode)
+      .map((permission) => permission.sectorCode),
+  );
+  return allowedSectors.size === 1 && allowedSectors.has(sectorCode);
+}
+
+function CutSectorOrdersPage({
+  stageName = "Corte",
+  orders,
+  search,
+  onSearchChange,
+  onSearchSubmit,
+  onOpen,
+  userFullName,
+}: {
+  stageName?: "Corte" | "Bordado" | "Estampado";
+  orders: DashboardRow[];
+  search: string;
+  onSearchChange: (value: string) => void;
+  onSearchSubmit: () => void;
+  onOpen: (orderCode: string) => void;
+  userFullName: string;
+}) {
+  const [displayMode, setDisplayMode] = useState<"cards" | "list">("cards");
+  const listLabel = stageName === "Corte" ? "Mis cortes" : stageName === "Bordado" ? "Mis bordados" : "Mis estampados";
+  const columns: CutColumn[] = stageName === "Corte" ? buildCutColumns(orders) : [
+    { key: "CUTTING", title: `En ${stageName.toLowerCase()}`, tone: cutStyles.statusCutting, iconClass: cutStyles.clockIcon, rows: orders },
+  ];
+
+  return (
+    <main className={cutStyles.screen}>
+      <header className={cutStyles.topBar}>
+        <button className={cutStyles.brand} type="button" aria-label="Control de Producción">
+          <span className={cutStyles.brandMark} aria-hidden="true" />
+          <strong>Control de Producción</strong>
+        </button>
+        <button className={cutStyles.navPill} type="button">{listLabel}</button>
+        <form
+          className={cutStyles.topActions}
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearchSubmit();
+          }}
+        >
+          <label className={cutStyles.searchBox}>
+            <span className={cutStyles.searchIcon} aria-hidden="true" />
+            <input type="search" placeholder="Buscar orden" aria-label="Buscar orden" value={search} onChange={(event) => onSearchChange(event.target.value)} />
+          </label>
+          <button className={cutStyles.iconButton} type="button" aria-label="Notificaciones"><span className={cutStyles.bellIcon} aria-hidden="true" /></button>
+          <span className={cutStyles.userChip}><span className={cutStyles.userIcon} aria-hidden="true" />{userFullName} · {stageName}</span>
+          <button className={cutStyles.avatar} type="button" title="Cerrar sesión" onClick={() => { window.localStorage.removeItem("proma-session"); window.location.assign("/ordenes"); }}>{userInitials(userFullName)}</button>
+        </form>
+      </header>
+      <section className={cutStyles.content}>
+        <div className={cutStyles.boardHero}>
+          <span className={cutStyles.eyebrow}>Responsable de {stageName.toLowerCase()} · {userFullName}</span>
+          <h1>{listLabel}</h1>
+          <p>{stageName === "Corte" ? "Solo las órdenes que esperan tela, están listas para cortar o se están cortando." : `Órdenes de ${stageName.toLowerCase()} · cargas por parte de prenda y lote.`}</p>
+        </div>
+        <div className={cutStyles.viewSwitch} aria-label="Modo de visualización">
+          <button className={displayMode === "cards" ? cutStyles.viewSwitchActive : ""} type="button" onClick={() => setDisplayMode("cards")}>
+            <span className={cutStyles.gridIcon} aria-hidden="true" />
+            Tarjetas
+          </button>
+          <button className={displayMode === "list" ? cutStyles.viewSwitchActive : ""} type="button" onClick={() => setDisplayMode("list")}>
+            <span className={cutStyles.listIcon} aria-hidden="true" />
+            Lista
+          </button>
+        </div>
+
+        {displayMode === "cards" ? (
+          <div className={cutStyles.boardGrid}>
+            {columns.map((column) => (
+              <section className={cutStyles.column} key={column.key}>
+                <header className={cutStyles.columnHeader}>
+                  <h2 className={`${cutStyles.columnTitle} ${column.tone}`}>
+                    <span className={column.iconClass} aria-hidden="true" />
+                    {column.title}
+                  </h2>
+                  <span className={cutStyles.columnCount}>{column.rows.length}</span>
+                </header>
+                <div className={cutStyles.orderList}>
+                  {!column.rows.length ? <p>No hay órdenes pendientes en este sector.</p> : null}
+                  {column.rows.map((order) => (
+                    <CutOrderCard stageName={stageName} key={order.partId} order={order} onOpen={onOpen} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <CutOrdersList stageName={stageName} columns={columns} onOpen={onOpen} />
+        )}
+      </section>
+    </main>
+  );
+}
+
+type CutColumn = {
+  key: "WAITING" | "READY" | "CUTTING";
+  title: string;
+  tone: string;
+  iconClass: string;
+  rows: DashboardRow[];
+};
+
+function buildCutColumns(orders: DashboardRow[]): CutColumn[] {
+  const waiting = orders.filter((order) => cutColumnKey(order) === "WAITING");
+  const ready = orders.filter((order) => cutColumnKey(order) === "READY");
+  const cutting = orders.filter((order) => cutColumnKey(order) === "CUTTING");
+  return [
+    { key: "WAITING", title: "Esperando tela", tone: cutStyles.statusWaiting, iconClass: cutStyles.boxIcon, rows: waiting },
+    { key: "READY", title: "Listo para cortar", tone: cutStyles.statusReady, iconClass: cutStyles.clockIcon, rows: ready },
+    { key: "CUTTING", title: "En corte", tone: cutStyles.statusCutting, iconClass: cutStyles.scissorIcon, rows: cutting },
+  ];
+}
+
+function cutColumnKey(order: DashboardRow): CutColumn["key"] {
+  const note = (order.activeNote ?? "").toUpperCase();
+  if (note.includes("ESPERANDO_TELA")) return "WAITING";
+  if (note.includes("LISTO_PARA_CORTAR")) return "READY";
+  if (note.includes("EN_CORTE")) return "CUTTING";
+  return (order.daysInStage ?? 0) > 0 ? "CUTTING" : "READY";
+}
+
+function CutOrderCard({ order, onOpen, stageName = "Corte" }: { stageName?: string; order: DashboardRow; onOpen: (orderCode: string) => void }) {
+  return (
+    <button className={cutStyles.orderCard} type="button" onClick={() => onOpen(order.externalCode || order.internalCode || order.orderId)}>
+      <span>
+        <span className={cutStyles.orderCode}>{rowCode(order)}</span>
+        <span className={cutStyles.clientName}>{order.clientName}</span>
+        <span className={cutStyles.orderMeta}>{order.articleName} · <span className={cutStyles.quantity}>{order.quantity}</span> prendas</span>
+        <span className={cutStyles.orderNote}>{stageName === "Corte" ? cutOrderNote(order) : order.activeNote || `Trabajo de ${stageName.toLowerCase()}`}</span>
+        {cutMissingNote(order) ? <span className={cutStyles.missingNote}>{cutMissingNote(order)}</span> : null}
+      </span>
+      <span className={cutStyles.chevron} aria-hidden="true">›</span>
+    </button>
+  );
+}
+
+function CutOrdersList({ columns, onOpen, stageName = "Corte" }: { stageName?: string; columns: CutColumn[]; onOpen: (orderCode: string) => void }) {
+  return (
+    <div className={cutStyles.listTable}>
+      <div className={cutStyles.listHead}>
+        <span>Orden de corte</span>
+        <span>Tela</span>
+        <span>Prendas</span>
+        <span>Entrega</span>
+        <span>Nota</span>
+        <span />
+      </div>
+      {columns.map((column) => (
+        <section className={cutStyles.listGroup} key={column.key}>
+          <header className={`${cutStyles.listGroupTitle} ${column.tone}`}>
+            <span className={column.iconClass} aria-hidden="true" />
+            <strong>{column.title}</strong>
+            <small>{column.rows.length}</small>
+          </header>
+          {column.rows.map((order) => (
+            <button className={cutStyles.listRow} key={order.partId} type="button" onClick={() => onOpen(order.externalCode || order.internalCode || order.orderId)}>
+              <span>
+                <b className={cutStyles.orderCode}>{rowCode(order)}</b>
+                <strong>{order.clientName}</strong>
+                <small>{order.articleName}</small>
+              </span>
+              <span>
+                <strong>{order.fabricName || "Sin tela"}</strong>
+                {cutMissingNote(order) ? <small className={cutStyles.missingNote}>{cutMissingNote(order)}</small> : null}
+              </span>
+              <b>{order.quantity}</b>
+              <b>{order.estimatedFinishAt ? formatDate(order.estimatedFinishAt) : "Sin fecha"}</b>
+              <span>{stageName === "Corte" ? cutListNote(order) : order.activeNote || stageName}</span>
+              <span className={cutStyles.chevron} aria-hidden="true">›</span>
+            </button>
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function cutMissingNote(order: DashboardRow): string {
+  const note = order.activeNote ?? "";
+  if (note.includes("FALTA_TELA_PRINCIPAL")) return "Falta tela principal";
+  if (note.includes("FALTA_TELA_COMPLEMENTARIA")) return "Falta tela complementaria";
+  return "";
+}
+
+function cutListNote(order: DashboardRow): string {
+  const note = cutDisplayNote(order);
+  if (note) return note;
+  if (cutColumnKey(order) === "CUTTING") return order.location || "Cortando tela principal";
+  return order.statusLabel || "Molderia aprobada";
+}
+
+function cutOrderNote(order: DashboardRow): string {
+  const note = cutDisplayNote(order);
+  if (note) return `${note} · entrega ${order.estimatedFinishAt ? formatDate(order.estimatedFinishAt) : "sin fecha"}`;
+  if (cutColumnKey(order) === "CUTTING") return `${order.location || "Tendido en mesa"} · entrega ${order.estimatedFinishAt ? formatDate(order.estimatedFinishAt) : "sin fecha"}`;
+  return `Tela y moldes en mesa · entrega ${order.estimatedFinishAt ? formatDate(order.estimatedFinishAt) : "sin fecha"}`;
+}
+
+function cutDisplayNote(order: DashboardRow): string {
+  const note = order.activeNote ?? "";
+  const match = note.match(/NOTA:([^|]+)/);
+  return match?.[1]?.trim() ?? "";
 }
 
 function OrdersView({

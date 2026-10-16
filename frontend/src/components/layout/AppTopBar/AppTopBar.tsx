@@ -6,9 +6,11 @@ import styles from "./AppTopBar.module.css";
 
 export type AppTopBarSection = "orders" | "sectors" | "masters" | "stock";
 
-type AppTopBarProps = {
+export type AppTopBarProps = {
   activeSection: AppTopBarSection;
   canShowManagement?: boolean;
+  canShowSectors?: boolean;
+  canShowStock?: boolean;
   onNavigate?: (section: AppTopBarSection) => void;
   searchValue?: string;
   searchPlaceholder?: string;
@@ -16,6 +18,9 @@ type AppTopBarProps = {
   onSearchChange?: (value: string) => void;
   onSearchSubmit?: () => void;
   actions?: ReactNode;
+  userFullName?: string;
+  userEmail?: string;
+  onLogout?: () => void;
 };
 
 const navItems: { section: AppTopBarSection; label: string; href: string; iconClass: string }[] = [
@@ -28,6 +33,8 @@ const navItems: { section: AppTopBarSection; label: string; href: string; iconCl
 export function AppTopBar({
   activeSection,
   canShowManagement = true,
+  canShowSectors = true,
+  canShowStock = true,
   onNavigate,
   searchValue,
   searchPlaceholder = "Buscar orden",
@@ -35,8 +42,16 @@ export function AppTopBar({
   onSearchChange,
   onSearchSubmit,
   actions,
+  userFullName,
+  userEmail,
+  onLogout,
 }: AppTopBarProps) {
-  const visibleItems = navItems.filter((item) => item.section !== "masters" || canShowManagement);
+  const visibleItems = navItems.filter((item) => {
+    if (item.section === "masters") return canShowManagement;
+    if (item.section === "sectors") return canShowSectors;
+    if (item.section === "stock") return canShowStock;
+    return true;
+  });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -103,7 +118,25 @@ export function AppTopBar({
           </form>
         ) : null}
         {actions}
+        {userFullName && onLogout ? (
+          <div className={styles.profileBox}>
+            <details>
+              <summary className={styles.profileButton} title={userFullName}>
+                {userInitials(userFullName)}
+              </summary>
+              <div className={styles.profilePanel}>
+                <strong>{userFullName}</strong>
+                {userEmail ? <span>{userEmail}</span> : null}
+                <button type="button" onClick={onLogout}>Cerrar sesión</button>
+              </div>
+            </details>
+          </div>
+        ) : null}
       </div>
     </header>
   );
+}
+
+function userInitials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "U";
 }
