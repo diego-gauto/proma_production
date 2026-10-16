@@ -31,7 +31,7 @@ describe('ConfectionService', () => {
   it('assigns a cut to a workshop before it is sent', async () => {
     parts.findOne.mockResolvedValue({ id: 'part-1', quantity: 10, events: [
       { stage: { code: 'CORTE' }, finishedAt: new Date() },
-    ] });
+    ], cutLoads: [{ items: [{ quantity: 10 }] }] });
     assignments.findOne.mockResolvedValue(null);
     workshops.findOneBy.mockResolvedValue({ id: 'workshop-1' });
     users.findOneBy.mockResolvedValue({ id: 'user-1' });

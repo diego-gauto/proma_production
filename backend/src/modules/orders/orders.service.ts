@@ -226,7 +226,9 @@ export class OrdersService {
     currentUser: AuthenticatedUser,
   ): Promise<OrderPart[]> {
     const parent = await this.findPart(partId);
-    this.ensureOperationalChangePermission(currentUser, parent.currentStage?.code ?? null);
+    const splitStage = parent.currentStage?.code ?? this.latestCompletedStage(parent);
+    this.ensureSplitAllowed(splitStage);
+    this.ensureOperationalChangePermission(currentUser, splitStage);
     if (parent.isSplit || parent.status === PartStatus.DIVIDIDA) {
       throw new ConflictException('Esta parte ya fue dividida');
     }
@@ -574,6 +576,19 @@ export class OrdersService {
     if (!allowed) {
       throw new ForbiddenException('No tenes permisos para dividir o reunificar esta parte');
     }
+  }
+
+  private ensureSplitAllowed(stage: SectorCode | null): void {
+    const allowed = [SectorCode.CORTE, SectorCode.CONFECCION, SectorCode.OJAL_BOTON, SectorCode.PLANCHA, SectorCode.TERMINACION];
+    if (!stage || !allowed.includes(stage)) {
+      throw new BadRequestException('La division solo esta permitida en Corte, Confeccion, Ojal y Boton, Plancha o Terminacion');
+    }
+  }
+
+  private latestCompletedStage(part: OrderPart): SectorCode | null {
+    const completed = (part.events ?? []).filter((event) => event.finishedAt && event.stage?.code);
+    completed.sort((left, right) => (right.finishedAt?.getTime() ?? 0) - (left.finishedAt?.getTime() ?? 0));
+    return completed[0]?.stage.code ?? null;
   }
 
   private async findPart(id: string): Promise<OrderPart> {

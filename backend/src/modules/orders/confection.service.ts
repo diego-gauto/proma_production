@@ -23,13 +23,14 @@ export class ConfectionService {
   ) {}
   async assign(partId: string, dto: AssignConfectionDto, user: AuthenticatedUser): Promise<ConfectionAssignment> {
     this.ensurePermission(user);
-    const [part, workshop, assignedBy] = await Promise.all([this.parts.findOne({ where: { id: partId }, relations: { events: { stage: true } } }), this.workshops.findOneBy({ id: dto.workshopId }), this.users.findOneBy({ id: user.id })]);
+    const [part, workshop, assignedBy] = await Promise.all([this.parts.findOne({ where: { id: partId }, relations: { events: { stage: true }, cutLoads: { items: true } } }), this.workshops.findOneBy({ id: dto.workshopId }), this.users.findOneBy({ id: user.id })]);
     if (!part) throw new NotFoundException('Parte no encontrada');
     if (!workshop) throw new NotFoundException('Taller no encontrado');
-    if (!(part.events ?? []).some((event) => event.stage.code === SectorCode.CORTE && event.finishedAt !== null)) throw new BadRequestException('La parte solo puede asignarse cuando Corte está finalizado');
+    const cutQuantity = (part.cutLoads ?? []).flatMap((load) => load.items ?? []).reduce((total, item) => total + item.quantity, 0);
+    if (cutQuantity <= 0) throw new BadRequestException('La parte solo puede asignarse cuando existe corte registrado');
     const existing = await this.assignments.findOne({ where: { orderPart: { id: partId }, status: ConfectionAssignmentStatus.ASIGNADO } });
     if (existing) throw new ConflictException('La parte ya tiene un taller asignado');
-    return this.assignments.save(this.assignments.create({ orderPart: part, workshop, quantity: part.quantity, deliveredQuantity: 0, status: ConfectionAssignmentStatus.ASIGNADO, assignedBy: assignedBy!, assignedAt: new Date(), note: dto.note ?? null }));
+    return this.assignments.save(this.assignments.create({ orderPart: part, workshop, quantity: (part.cutLoads ?? []).flatMap((load) => load.items ?? []).reduce((total, item) => total + item.quantity, 0), deliveredQuantity: 0, status: ConfectionAssignmentStatus.ASIGNADO, assignedBy: assignedBy!, assignedAt: new Date(), note: dto.note ?? null }));
   }
   async send(id: string, dto: SendConfectionDto, user: AuthenticatedUser): Promise<ConfectionAssignment> {
     this.ensurePermission(user); const assignment = await this.findAssignment(id);

@@ -2421,3 +2421,5 @@
     justify-items: start;
   }
 }
+
+.sectorTitleButton { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 800; cursor: pointer; padding: 0; text-align: left; }

@@ -592,6 +592,7 @@ export default function Home() {
             movingPartId={movingPartId}
             sectorDisplayMode={sectorDisplayMode}
             onNewOrder={() => router.push("/ordenes/nueva")}
+            onSectorOpen={(code) => router.push("/sectores?stage=" + code)}
           />
         ) : mainView === "stock" ? (
           <StockView
@@ -1188,6 +1189,7 @@ function OrdersView({
   movingPartId,
   sectorDisplayMode,
   onNewOrder,
+  onSectorOpen,
 }: {
   mode: "orders" | "sectors";
   orders: DashboardRow[];
@@ -1198,6 +1200,7 @@ function OrdersView({
   movingPartId: string | null;
   sectorDisplayMode: "list" | "cards";
   onNewOrder: () => void;
+  onSectorOpen: (code: string) => void;
 }) {
   const [expandedSectors, setExpandedSectors] = useState<Record<number, boolean>>({});
 
@@ -1338,7 +1341,7 @@ function OrdersView({
                 }}
               >
                 <header>
-                  <strong>{column.stage.name}</strong>
+                  <button type="button" className={styles.sectorTitleButton} onClick={() => onSectorOpen(column.stage.code)}>{column.stage.name}</button>
                   <span>{column.parts.length}</span>
                 </header>
                 <div className={styles.kanbanCards}>
@@ -1573,7 +1576,7 @@ function statusText(row: DashboardRow): string {
 
 function partStatusText(status: string): string {
   if (status === "EN_PROCESO") return "En proceso";
-  if (status === "PENDIENTE") return "Pendiente";
+  if (status === "PENDIENTE") return "Sin asignación";
   if (status === "FINALIZADA") return "Finalizada";
   if (status === "DIVIDIDA") return "Dividida";
   if (status === "REINTEGRADA") return "Reintegrada";
