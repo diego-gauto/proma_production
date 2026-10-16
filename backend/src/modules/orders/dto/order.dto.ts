@@ -13,7 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
-import { StageExecutionType } from '../../catalog/entities/catalog.enums';
+import { OrderFabricUseType, StageExecutionType } from '../../catalog/entities/catalog.enums';
 import { PartSplitMode, SupplyCompleteness } from '../entities/order.enums';
 
 export class OrderQueryDto extends PaginationQueryDto {}
@@ -29,6 +29,10 @@ export class CreateOrderRequestedItemDto {
   @IsOptional()
   @IsUUID()
   fabricId?: string;
+
+  @IsOptional()
+  @IsEnum(OrderFabricUseType)
+  useType?: OrderFabricUseType;
 
   @IsOptional()
   @IsString()
@@ -172,6 +176,88 @@ export class UpdatePartSupplyDto {
   @IsInt()
   @Min(0)
   quantityAvailable?: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+
+export class CutLoadItemDto {
+  @Type(() => Number)
+  @IsInt()
+  sizeCurveValueId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantity!: number;
+}
+
+export class CreateCutLoadDto {
+  @IsOptional()
+  @IsEnum(OrderFabricUseType)
+  fabricUseType?: OrderFabricUseType;
+
+  @IsString()
+  @MaxLength(80)
+  lotCode!: string;
+
+  @IsOptional()
+  @IsUUID()
+  fabricRollId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
+  fabricQuantity?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(12)
+  fabricUnit?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CutLoadItemDto)
+  items!: CutLoadItemDto[];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+export class DecorationLoadItemDto {
+  @Type(() => Number)
+  @IsInt()
+  sizeCurveValueId!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantity!: number;
+}
+
+export class CreateDecorationLoadDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  garmentPart?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  lotCode?: string;
+
+  @IsDateString()
+  workDate!: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => DecorationLoadItemDto)
+  items!: DecorationLoadItemDto[];
 
   @IsOptional()
   @IsString()

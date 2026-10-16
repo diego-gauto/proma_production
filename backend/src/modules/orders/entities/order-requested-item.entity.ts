@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Fabric } from '../../catalog/entities/fabric.entity';
+import { OrderFabricUseType } from '../../catalog/entities/catalog.enums';
 import { SizeCurveValue } from '../../catalog/entities/size-curve-value.entity';
 import { Order } from './order.entity';
 
@@ -39,6 +40,9 @@ export class OrderRequestedItem {
 
   @Column({ name: 'quantity_requested', type: 'integer' })
   quantityRequested!: number;
+
+  @Column({ name: 'use_type', type: 'enum', enum: OrderFabricUseType, enumName: 'order_fabric_use_type', default: OrderFabricUseType.PRIMARIA })
+  useType!: OrderFabricUseType;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;

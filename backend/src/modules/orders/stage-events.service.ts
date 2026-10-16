@@ -21,6 +21,7 @@ import { OrderPart } from './entities/order-part.entity';
 import { Order } from './entities/order.entity';
 import { OrderStatus, PartSplitMode, PartStatus } from './entities/order.enums';
 import { PartStageEvent } from './entities/part-stage-event.entity';
+import { SupplyCategory } from '../catalog/entities/catalog.enums';
 
 type FinishResult = {
   event: PartStageEvent;
@@ -57,6 +58,10 @@ export class StageEventsService {
 
     this.ensureCanOperate(currentUser, stage.code, PermissionAction.INICIAR_ETAPA);
 
+    if ([SectorCode.AVIOS_CONFECCION, SectorCode.AVIOS_TERMINACION].includes(stage.code)) {
+      throw new BadRequestException('Los avíos se preparan en paralelo desde la vista de Avíos');
+    }
+
     if (part.isSplit || part.status === PartStatus.DIVIDIDA) {
       throw new BadRequestException('No se puede iniciar una parte dividida');
     }
@@ -73,12 +78,19 @@ export class StageEventsService {
 
     const active = await this.eventsRepository.findOne({
       where: { orderPart: { id: part.id }, finishedAt: IsNull() },
+      relations: { stage: true },
     });
-    if (active) {
+    const legacySupplyEvent = active && [SectorCode.AVIOS_CONFECCION, SectorCode.AVIOS_TERMINACION].includes(active.stage.code);
+    if (active && !legacySupplyEvent) {
       throw new ConflictException('Esta parte ya tiene una etapa en curso');
     }
 
     const workshop = await this.resolveWorkshop(dto, stage);
+    if (active && legacySupplyEvent) {
+      active.finishedAt = new Date();
+      active.note = [active.note, 'Preparación trasladada al checklist paralelo de Avíos; este cierre no indica avíos completos.'].filter(Boolean).join(' · ');
+      await this.eventsRepository.save(active);
+    }
     const event = this.eventsRepository.create({
       orderPart: part,
       stage,
@@ -118,6 +130,12 @@ export class StageEventsService {
       active.stage.code,
       PermissionAction.FINALIZAR_ETAPA,
     );
+
+    if (active.stage.code === SectorCode.BORDADO || active.stage.code === SectorCode.ESTAMPADO) {
+      await this.ensureDecorationPartsComplete(part.id, active.stage.code);
+    }
+
+    await this.ensureSuppliesComplete(part.id, active.stage.code);
 
     const finishedAt = dto.actualFinishAt ? new Date(dto.actualFinishAt) : new Date();
     active.finishedAt = finishedAt;
@@ -250,6 +268,61 @@ export class StageEventsService {
     );
     if (!allowed) {
       throw new ForbiddenException('No tenes permisos para operar este sector');
+    }
+  }
+
+  private async ensureDecorationPartsComplete(partId: string, sector: SectorCode): Promise<void> {
+    const part = await this.partsRepository.findOne({
+      where: { id: partId },
+      relations: {
+        order: { article: { decorationParts: true } },
+        cutLoads: { items: { sizeCurveValue: true } },
+        decorationLoads: { items: { sizeCurveValue: true }, stageEvent: { stage: true } },
+      },
+    });
+    if (!part) throw new NotFoundException('Parte no encontrada');
+    const required = [...new Set(part.order.article.decorationParts
+      .filter(item => item.decorationType === sector).map(item => item.garmentPart))];
+    const cut = new Map<number, number>();
+    for (const load of part.cutLoads ?? []) {
+      if (load.fabricUseType === 'COMPLEMENTO') continue;
+      for (const item of load.items) cut.set(item.sizeCurveValue.id, (cut.get(item.sizeCurveValue.id) ?? 0) + item.quantity);
+    }
+    const complete = required.length > 0 && [...cut.values()].some(quantity => quantity > 0) && required.every(name => {
+      const totals = new Map<number, number>();
+      for (const load of part.decorationLoads ?? []) {
+        if (load.garmentPart !== name || load.stageEvent.stage.code !== sector) continue;
+        for (const item of load.items) totals.set(item.sizeCurveValue.id, (totals.get(item.sizeCurveValue.id) ?? 0) + item.quantity);
+      }
+      return [...cut].every(([id, quantity]) => totals.get(id) === quantity || quantity === 0);
+    });
+    if (!complete) throw new BadRequestException('Completá los lotes de todas las partes de prenda antes de finalizar esta etapa');
+  }
+
+  private async ensureSuppliesComplete(partId: string, sector: SectorCode): Promise<void> {
+    const category = sector === SectorCode.CONFECCION ? SupplyCategory.CONFECCION
+      : sector === SectorCode.TERMINACION ? SupplyCategory.TERMINACION : null;
+    if (!category) return;
+    const part = await this.partsRepository.findOne({
+      where: { id: partId },
+      relations: { supplies: { supply: true }, order: { article: { supplies: { supply: true } } } },
+    });
+    if (!part) throw new NotFoundException('Parte no encontrada');
+    const required = (part.order.article.supplies ?? []).filter(item => item.supply.category === category);
+    // A split keeps preparation on its ancestor; do not duplicate garments for component branches.
+    let source = part;
+    while (!(source.supplies ?? []).length && source.parentPartId) {
+      const parent = await this.partsRepository.findOne({ where: { id: source.parentPartId }, relations: { supplies: { supply: true } } });
+      if (!parent) break;
+      source = parent;
+    }
+    const incomplete = required.filter(item => {
+      const prepared = source.supplies?.find(row => row.supply.id === item.supply.id);
+      const total = item.quantity == null ? null : Math.ceil(Number(item.quantity) * source.quantity);
+      return total == null || !prepared || prepared.quantityAvailable == null || prepared.quantityAvailable < total;
+    });
+    if (incomplete.length) {
+      throw new BadRequestException('Completá los avíos de ' + category.toLowerCase() + ' antes de finalizar esta etapa');
     }
   }
 

@@ -36,6 +36,26 @@ export class ArticleDecorationPartDto {
   @IsString()
   @MaxLength(30)
   decorationType!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  placement?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  decorationCode?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 }
 
 export class CreateArticleDto {

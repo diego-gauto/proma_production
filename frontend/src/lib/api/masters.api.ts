@@ -15,6 +15,12 @@ export type ProviderMaster = {
   id: string;
   businessName: string;
   taxId?: string | null;
+  businessSector?: string | null;
+  email?: string | null;
+  fixedPhone?: string | null;
+  street?: string | null;
+  streetNumber?: string | null;
+  floorApartment?: string | null;
   address?: string | null;
   locality?: string | null;
   district?: string | null;
@@ -27,6 +33,12 @@ export type ClientMaster = {
   id: string;
   businessName: string;
   taxId: string;
+  businessSector?: string | null;
+  email?: string | null;
+  fixedPhone?: string | null;
+  street?: string | null;
+  streetNumber?: string | null;
+  floorApartment?: string | null;
   address?: string | null;
   locality?: string | null;
   district?: string | null;
@@ -38,6 +50,11 @@ export type ClientMaster = {
 export type WorkshopMaster = {
   id: string;
   name: string;
+  email?: string | null;
+  fixedPhone?: string | null;
+  street?: string | null;
+  streetNumber?: string | null;
+  floorApartment?: string | null;
   address?: string | null;
   locality?: string | null;
   district?: string | null;
@@ -66,6 +83,7 @@ export type FabricMaster = {
   weightOz?: string | null;
   weaveType: "PUNTO" | "PLANO";
   formatType: "ABIERTO" | "TUBULAR";
+  consumptionUnit?: "m" | "kg";
   isActive: boolean;
 };
 

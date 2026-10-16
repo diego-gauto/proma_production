@@ -57,6 +57,36 @@ export class CreateClientDto {
   taxId!: string;
 
   @IsOptional()
+  @IsEmail()
+  @MaxLength(150)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  fixedPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  businessSector?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  streetNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  floorApartment?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(255)
   address?: string;
@@ -97,6 +127,36 @@ export class UpdateClientDto {
   @IsString()
   @MaxLength(30)
   taxId?: string;
+
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(150)
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  fixedPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  businessSector?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(180)
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(30)
+  streetNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  floorApartment?: string;
 
   @IsOptional()
   @IsString()

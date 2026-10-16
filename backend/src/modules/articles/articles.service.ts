@@ -127,8 +127,15 @@ export class ArticlesService {
   }
 
   private buildDecorationParts(
-    parts: { garmentPart: string; decorationType: string }[],
+    parts: { garmentPart: string; decorationType: string; placement?: string; decorationCode?: string; imageUrl?: string; notes?: string }[],
   ): ArticleDecorationPart[] {
-    return parts.map((part) => Object.assign(new ArticleDecorationPart(), part));
+    return parts.map((part) => Object.assign(new ArticleDecorationPart(), {
+      garmentPart: part.garmentPart,
+      decorationType: part.decorationType,
+      placement: part.placement ?? null,
+      decorationCode: part.decorationCode ?? null,
+      imageUrl: part.imageUrl ?? null,
+      notes: part.notes ?? null,
+    }));
   }
 }

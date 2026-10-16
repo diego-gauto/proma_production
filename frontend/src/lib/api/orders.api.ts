@@ -11,6 +11,28 @@ export type PartSupply = {
   supply?: { id: string; name: string; code?: string; category?: string } | null;
 };
 
+export type DecorationLoad = {
+  garmentPart?: string | null;
+  lotCode?: string | null;
+  id: string;
+  workDate: string;
+  note?: string | null;
+  createdAt: string;
+  stageEvent?: { id: string; stage?: { id: number; code: string; name: string } | null } | null;
+  items?: { id: string; quantity: number; sizeCurveValue: { id: number; label: string } }[];
+};
+
+export type CutLoad = {
+  id: string;
+  lotCode: string;
+  fabricUseType?: 'PRIMARIA' | 'COMPLEMENTO';
+  fabricQuantity?: string | null;
+  fabricUnit?: string | null;
+  createdAt: string;
+  fabricRoll?: { id: string; code: string; lot: string; currentQuantity?: number; fabric?: { id: string; code: string; name: string; color?: string | null; consumptionUnit?: "m" | "kg" }; entry?: { fabric?: { id: string; code: string; name: string; color?: string | null; consumptionUnit?: 'm' | 'kg' } | null } | null } | null;
+  items?: { id: string; quantity: number; sizeCurveValue: { id: number; label: string } }[];
+};
+
 export type PartNode = {
   id: string;
   parentPartId?: string | null;
@@ -35,6 +57,8 @@ export type PartNode = {
     includesAtraque?: boolean | null;
   }[];
   supplies?: PartSupply[];
+  cutLoads?: CutLoad[];
+  decorationLoads?: DecorationLoad[];
   children?: PartNode[];
 };
 
@@ -77,6 +101,7 @@ export type OrderSummary = {
     id: string;
     color?: string | null;
     quantityRequested: number;
+    useType?: "PRIMARIA" | "COMPLEMENTO";
     sizeCurveValue: { id: number; label: string };
     fabric?: FabricMaster | null;
   }[];
@@ -175,6 +200,9 @@ export async function movePartToStage(
   partId: string,
   targetStage: StageOption,
 ): Promise<StageEventResponse> {
+  if (targetStage.code.startsWith("AVIOS_")) {
+    throw new Error("Los avíos se preparan en paralelo desde la vista de Avíos");
+  }
   if (targetStage.executionType === "EXTERNO") {
     throw new Error("Esta etapa requiere seleccionar taller desde el detalle de la orden");
   }
@@ -220,5 +248,67 @@ export function resolveOrderRepair(
   return apiRequest<OrderSummary>(`/orders/${orderId}/repair/resolve`, {
     method: "POST",
     token,
+  });
+}
+
+
+export type StageProgressResponse = {
+  progress: Array<{ id: string; quantityDone?: number | null; quantityPrepared?: number | null; shortageReason?: string | null; note?: string | null }>;
+  stageFinished: boolean;
+};
+
+export function recordStageProgress(
+  token: string,
+  partId: string,
+  body: Record<string, unknown>,
+): Promise<StageProgressResponse> {
+  return apiRequest<StageProgressResponse>(`/order-parts/${partId}/progress`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+}
+
+
+export type CutLoadResponse = {
+  cutLoad: CutLoad;
+  stageFinished: boolean;
+};
+
+export type DecorationLoadResponse = {
+  decorationLoad: DecorationLoad;
+  stageFinished: boolean;
+};
+
+export type CreateCutLoadBody = {
+  lotCode: string;
+  fabricUseType?: 'PRIMARIA' | 'COMPLEMENTO';
+  fabricRollId?: string;
+  fabricQuantity?: number;
+  fabricUnit?: string;
+  items: { sizeCurveValueId: number; quantity: number }[];
+};
+
+export function createCutLoad(
+  token: string,
+  partId: string,
+  body: CreateCutLoadBody,
+): Promise<CutLoadResponse> {
+  return apiRequest<CutLoadResponse>(`/order-parts/${partId}/cut-loads`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
+  });
+}
+
+export function createDecorationLoad(
+  token: string,
+  partId: string,
+  body: Record<string, unknown>,
+): Promise<DecorationLoadResponse> {
+  return apiRequest<DecorationLoadResponse>(`/order-parts/${partId}/decoration-loads`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(body),
   });
 }

@@ -49,6 +49,9 @@ export class PartSupply {
   @JoinColumn({ name: 'updated_by' })
   updatedBy?: User | null;
 
+  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
+  updatedById?: string | null;
+
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
 }

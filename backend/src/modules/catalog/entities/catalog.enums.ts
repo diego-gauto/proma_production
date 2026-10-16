@@ -38,3 +38,14 @@ export enum FabricFormatType {
   ABIERTO = 'ABIERTO',
   TUBULAR = 'TUBULAR',
 }
+
+
+export enum FabricConsumptionUnit {
+  METROS = 'm',
+  KILOS = 'kg',
+}
+
+export enum OrderFabricUseType {
+  PRIMARIA = 'PRIMARIA',
+  COMPLEMENTO = 'COMPLEMENTO',
+}

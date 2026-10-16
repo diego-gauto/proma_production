@@ -58,3 +58,14 @@ test("movePartToStage rejects exclusively external stages", async () => {
     /requiere seleccionar taller/,
   );
 });
+
+
+test("moving to parallel Avíos never finishes the active production stage", async () => {
+  const originalFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; return new Response('{}'); };
+  try {
+    await assert.rejects(movePartToStage('token', 'part', { id: 4, code: 'AVIOS_CONFECCION', name: 'Avíos', executionType: 'INTERNO', isOptional: false }), /paralelo/);
+    assert.equal(called, false);
+  } finally { globalThis.fetch = originalFetch; }
+});

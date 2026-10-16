@@ -348,7 +348,8 @@
 **Tareas**:
 - Usuarios de sector ven solo lo pendiente/activo de sus sectores permitidos.
 - Panel para iniciar/finalizar etapa, nota, fecha estimada, taller si aplica.
-- Avíos tiene checklist propio; Bordado/Estampado muestran partes decorables; Corte muestra órdenes pendientes de corte.
+- Avíos tiene checklist paralelo propio en `/avios`, categorías Confección/Terminación, cuatro estados, cantidades por prenda y total preparado (sobrantes válidos). No bloquea el inicio de producción; controla el cierre de Confección y Terminación. Pendiente confirmar clasificación de botones para el cierre de Ojal y Botón. Bordado/Estampado muestran partes decorables; Corte muestra órdenes pendientes de corte.
+- Bordado y Estampado conservan la composición de la vista de Corte, sustituyendo telas por partes obligatorias del artículo. Cada parte tiene cargas e historial por lote, fecha y talle; la etapa termina al completar todas las partes.
 **Tests**:
 - Login usuario Bordado: solo ve Bordado y puede cargar avance de Bordado.
 - Login usuario Corte: solo ve Corte.

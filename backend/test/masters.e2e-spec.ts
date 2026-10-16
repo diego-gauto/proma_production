@@ -135,15 +135,18 @@ describe('Masters CRUD (e2e)', () => {
       request(app.getHttpServer()).post('/api/v1/clients').send({
         businessName: `Razón Social ${suffix}`,
         taxId: '30-12345678-9',
-        address: 'Av. Siempre Viva 742',
-        locality: 'San Martín',
-        district: 'General San Martín',
+        businessSector: 'Indumentaria industrial',
+        email: 'administracion@example.com',
+        fixedPhone: '011-4444-0000',
         province: 'Buenos Aires',
+        district: 'General San Martín',
+        locality: 'San Martín',
+        street: 'Av. Siempre Viva',
+        streetNumber: '742',
+        floorApartment: '2 A',
         contacts: [
           {
             contactName: 'Compras Uno',
-            email: 'compras1@example.com',
-            fixedPhone: '011-4444-1111',
             mobilePhone1: '11-1111-1111',
             mobilePhone2: '11-2222-2222',
             roleNote: 'Compras',
@@ -151,9 +154,9 @@ describe('Masters CRUD (e2e)', () => {
           },
           {
             contactName: 'Producción Dos',
-            email: 'prod2@example.com',
             mobilePhone1: '11-3333-3333',
             mobilePhone2: '11-4444-4444',
+            roleNote: 'Producción',
           },
         ],
       }),
@@ -162,7 +165,15 @@ describe('Masters CRUD (e2e)', () => {
     expect(created.body).toMatchObject({
       businessName: `Razón Social ${suffix}`,
       taxId: '30-12345678-9',
+      email: 'administracion@example.com',
+      fixedPhone: '011-4444-0000',
+      businessSector: 'Indumentaria industrial',
+      province: 'Buenos Aires',
+      district: 'General San Martín',
       locality: 'San Martín',
+      street: 'Av. Siempre Viva',
+      streetNumber: '742',
+      floorApartment: '2 A',
     });
     expect(created.body.contacts).toHaveLength(2);
     expect(created.body.contacts[0]).toMatchObject({
@@ -182,14 +193,21 @@ describe('Masters CRUD (e2e)', () => {
       request(app.getHttpServer())
         .patch(`/api/v1/clients/${created.body.id}`)
         .send({
+          province: 'Buenos Aires',
+          district: 'General San Martín',
           locality: 'Villa Lynch',
+          street: 'Calle Editada',
+          streetNumber: '1234',
+          floorApartment: 'PB',
+          businessSector: 'Textil',
+          email: 'clientes@example.com',
+          fixedPhone: '011-5555-0000',
           contacts: [
             {
               contactName: 'Contacto Editado',
-              email: 'editado@example.com',
-              fixedPhone: '011-5555-5555',
               mobilePhone1: '11-5555-5555',
               mobilePhone2: '11-6666-6666',
+              roleNote: 'Administración',
               isPrimary: true,
             },
           ],
@@ -198,8 +216,15 @@ describe('Masters CRUD (e2e)', () => {
       .expect(200)
       .expect(({ body }) => {
         expect(body.locality).toBe('Villa Lynch');
+        expect(body.street).toBe('Calle Editada');
+        expect(body.streetNumber).toBe('1234');
+        expect(body.floorApartment).toBe('PB');
+        expect(body.businessSector).toBe('Textil');
+        expect(body.email).toBe('clientes@example.com');
+        expect(body.fixedPhone).toBe('011-5555-0000');
         expect(body.contacts).toHaveLength(1);
         expect(body.contacts[0].contactName).toBe('Contacto Editado');
+        expect(body.contacts[0].roleNote).toBe('Administración');
       });
   });
 
@@ -207,17 +232,19 @@ describe('Masters CRUD (e2e)', () => {
     const created = await auth(
       request(app.getHttpServer()).post('/api/v1/workshops').send({
         name: `Taller ${suffix}`,
-        address: 'Calle Taller 123',
-        locality: 'Morón',
-        district: 'Morón',
+        email: 'taller@example.com',
+        fixedPhone: '011-4000-0000',
         province: 'Buenos Aires',
+        district: 'Morón',
+        locality: 'Morón',
+        street: 'Calle Taller',
+        streetNumber: '123',
+        floorApartment: '1 B',
         specialties: [SectorCode.CONFECCION, SectorCode.PLANCHA],
         specialtyDetail: 'Pantalones y camperas',
         contacts: [
           {
             contactName: 'Encargado Taller',
-            email: 'taller@example.com',
-            fixedPhone: '011-4000-0000',
             mobilePhone1: '11-7000-0000',
             mobilePhone2: '11-8000-0000',
           },
@@ -226,6 +253,11 @@ describe('Masters CRUD (e2e)', () => {
     ).expect(201);
 
     expect(created.body.taxId).toBeUndefined();
+    expect(created.body.email).toBe('taller@example.com');
+    expect(created.body.fixedPhone).toBe('011-4000-0000');
+    expect(created.body.street).toBe('Calle Taller');
+    expect(created.body.streetNumber).toBe('123');
+    expect(created.body.floorApartment).toBe('1 B');
     expect(created.body.specialtyDetail).toBe('Pantalones y camperas');
     expect(created.body.contacts).toHaveLength(1);
 
@@ -341,8 +373,22 @@ describe('Masters CRUD (e2e)', () => {
           { supplyId: supplyTwo.body.id, quantity: 1, note: 'Interior' },
         ],
         decorationParts: [
-          { garmentPart: 'Pecho izquierdo', decorationType: 'BORDADO' },
-          { garmentPart: 'Espalda', decorationType: 'ESTAMPADO' },
+          {
+            garmentPart: 'Delantero',
+            decorationType: 'BORDADO',
+            placement: 'Pecho izquierdo',
+            decorationCode: 'B-123',
+            imageUrl: 'https://example.com/bordado.png',
+            notes: 'Hilo blanco',
+          },
+          {
+            garmentPart: 'Espalda',
+            decorationType: 'ESTAMPADO',
+            placement: 'Centrado',
+            decorationCode: 'E-456',
+            imageUrl: 'https://example.com/estampa.png',
+            notes: 'Medida 20cm',
+          },
         ],
       }),
     ).expect(201);
@@ -355,6 +401,26 @@ describe('Masters CRUD (e2e)', () => {
     expect(article.body.fabrics).toBeUndefined();
     expect(article.body.supplies).toHaveLength(2);
     expect(article.body.decorationParts).toHaveLength(2);
+    expect(article.body.decorationParts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          garmentPart: 'Delantero',
+          decorationType: 'BORDADO',
+          placement: 'Pecho izquierdo',
+          decorationCode: 'B-123',
+          imageUrl: 'https://example.com/bordado.png',
+          notes: 'Hilo blanco',
+        }),
+        expect.objectContaining({
+          garmentPart: 'Espalda',
+          decorationType: 'ESTAMPADO',
+          placement: 'Centrado',
+          decorationCode: 'E-456',
+          imageUrl: 'https://example.com/estampa.png',
+          notes: 'Medida 20cm',
+        }),
+      ]),
+    );
   });
 
 
@@ -385,11 +451,30 @@ describe('Masters CRUD (e2e)', () => {
       request(app.getHttpServer()).post('/api/v1/providers').send({
         businessName: `Proveedor ${suffix}`,
         taxId: `PR-${suffix}`.slice(0, 30),
-        address: 'Calle Proveedor 123',
-        locality: 'San Martin',
-        contacts: [{ contactName: 'Compras Proveedor', mobilePhone1: '11-9999-1111', isPrimary: true }],
+        businessSector: 'Avíos',
+        email: 'proveedor@example.com',
+        fixedPhone: '011-4999-0000',
+        province: 'Buenos Aires',
+        district: 'General San Martín',
+        locality: 'San Martín',
+        street: 'Calle Proveedor',
+        streetNumber: '123',
+        floorApartment: '4 C',
+        contacts: [{ contactName: 'Compras Proveedor', mobilePhone1: '11-9999-1111', roleNote: 'Ventas', isPrimary: true }],
       }),
     ).expect(201);
+    expect(provider.body).toMatchObject({
+      businessSector: 'Avíos',
+      email: 'proveedor@example.com',
+      fixedPhone: '011-4999-0000',
+      street: 'Calle Proveedor',
+      streetNumber: '123',
+      floorApartment: '4 C',
+    });
+    expect(provider.body.contacts[0]).toMatchObject({
+      contactName: 'Compras Proveedor',
+      roleNote: 'Ventas',
+    });
 
     const fabric = await auth(
       request(app.getHttpServer()).post('/api/v1/fabrics').send({

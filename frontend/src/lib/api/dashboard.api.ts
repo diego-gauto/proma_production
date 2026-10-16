@@ -19,6 +19,7 @@ export type DashboardRow = {
   rowType: "SIMPLE" | "SPLIT_PARENT" | "SPLIT_CHILD";
   stage: StageOption | null;
   location: string;
+  activeNote: string | null;
   startedAt: string | null;
   estimatedFinishAt: string | null;
   daysInStage: number | null;

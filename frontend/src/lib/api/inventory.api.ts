@@ -50,7 +50,7 @@ export type StockAdjustmentInput = {
 };
 
 export type FabricStockRow = {
-  fabric: { id: string; code: string; name: string; color?: string | null };
+  fabric: { id: string; code: string; name: string; color?: string | null; consumptionUnit?: "m" | "kg" };
   rollCount: number;
   originalQuantity: number;
   currentQuantity: number;
