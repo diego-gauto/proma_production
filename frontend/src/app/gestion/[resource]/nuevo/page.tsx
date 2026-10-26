@@ -200,10 +200,10 @@ function loadStoredSession(): LoginResponse | null {
   }
 }
 
-export default function NewManagementResourcePage() {
+export function NewManagementResourcePage({ resourceOverride }: { resourceOverride?: MasterName }) {
   const router = useRouter();
   const params = useParams<{ resource: string }>();
-  const resource = params.resource as MasterName;
+  const resource = resourceOverride ?? (params.resource as MasterName);
   const isValidResource = resourceKeys.has(resource);
   const resourceMeta = masterResources.find((entry) => entry.key === resource) ?? masterResources[0];
   const [session, setSession] = useState<LoginResponse | null>(null);
@@ -506,6 +506,8 @@ export default function NewManagementResourcePage() {
   );
 }
 
+
+export default NewManagementResourcePage;
 
 function ArticleDetails({
   supplyRows,
