@@ -324,7 +324,10 @@ describe('phase one data model', () => {
   it('seeds the initial admin user from environment variables', async () => {
     const admin = await connection
       .getRepository(User)
-      .findOneByOrFail({ email: process.env.ADMIN_INITIAL_EMAIL });
+      .createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', { email: process.env.ADMIN_INITIAL_EMAIL })
+      .getOneOrFail();
 
     expect(admin.fullName).toBe('Admin Inicial');
     expect(admin.role).toBe(UserRole.ADMIN);

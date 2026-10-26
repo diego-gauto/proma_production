@@ -25,6 +25,7 @@ export type ProviderMaster = {
   locality?: string | null;
   district?: string | null;
   province?: string | null;
+  notes?: string | null;
   contacts?: ContactMaster[];
   isActive: boolean;
 };
@@ -43,6 +44,7 @@ export type ClientMaster = {
   locality?: string | null;
   district?: string | null;
   province?: string | null;
+  notes?: string | null;
   contacts?: ContactMaster[];
   isActive: boolean;
 };
@@ -61,6 +63,7 @@ export type WorkshopMaster = {
   province?: string | null;
   specialties: string[];
   specialtyDetail?: string | null;
+  notes?: string | null;
   contacts?: ContactMaster[];
   isActive: boolean;
 };
@@ -139,6 +142,18 @@ export function listMasters<T>(
     query.set("search", search);
   }
   return apiRequest<PaginatedResponse<T>>(`/${resource}?${query.toString()}`, { token });
+}
+
+export function getClient(token: string, id: string): Promise<ClientMaster> {
+  return apiRequest<ClientMaster>(`/clients/${encodeURIComponent(id)}`, { token });
+}
+
+export function getProvider(token: string, id: string): Promise<ProviderMaster> {
+  return apiRequest<ProviderMaster>("/providers/" + encodeURIComponent(id), { token });
+}
+
+export function getWorkshop(token: string, id: string): Promise<WorkshopMaster> {
+  return apiRequest<WorkshopMaster>("/workshops/" + encodeURIComponent(id), { token });
 }
 
 export function createMaster<T>(

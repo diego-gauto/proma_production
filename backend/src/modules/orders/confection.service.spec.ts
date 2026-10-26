@@ -4,7 +4,7 @@ import { ConfectionAssignmentStatus } from './entities/confection.enums';
 
 describe('ConfectionService', () => {
   const parts = { findOne: jest.fn() };
-  const assignments = { findOne: jest.fn(), create: jest.fn((value) => value), save: jest.fn() };
+  const assignments = { findOne: jest.fn(), create: jest.fn((value) => value), save: jest.fn(), update: jest.fn() };
   const deliveries = { create: jest.fn((value) => value), save: jest.fn() };
   const workshops = { findOne: jest.fn(), findOneBy: jest.fn() };
   const users = { findOneBy: jest.fn() };
@@ -50,8 +50,10 @@ describe('ConfectionService', () => {
       quantity: 10,
       deliveredQuantity: 4,
       deliveries: [],
+      orderPart: { id: 'part-1', quantity: 10 },
     };
     assignments.findOne.mockResolvedValue(assignment);
+    parts.findOne.mockResolvedValue({ id: 'part-1', quantity: 10, supplies: [{ quantityAvailable: 10, supply: { id: 'supply-1' } }], order: { article: { supplies: [] } } });
     users.findOneBy.mockResolvedValue({ id: 'user-1' });
     deliveries.save.mockImplementation(async (value) => value);
     assignments.save.mockImplementation(async (value) => value);
@@ -67,10 +69,40 @@ describe('ConfectionService', () => {
     expect(completed.deliveredQuantity).toBe(10);
   });
 
+  it('rejects a delivery above the quantity covered by partial confection supplies', async () => {
+    assignments.findOne.mockResolvedValue({
+      id: 'assignment-1', status: ConfectionAssignmentStatus.EN_CONFECCION,
+      quantity: 150, deliveredQuantity: 0, deliveries: [], orderPart: { id: 'part-1', quantity: 150 },
+    });
+    parts.findOne.mockResolvedValue({
+      id: 'part-1', quantity: 150,
+      supplies: [{ quantityAvailable: 100, supply: { id: 'supply-1' } }],
+      order: { article: { supplies: [{ quantity: 1, supply: { id: 'supply-1', category: 'CONFECCION' } }] } },
+    });
+
+    await expect(service.registerDelivery('assignment-1', { quantity: 101 }, { id: 'user-1', role: 'ADMIN' } as never))
+      .rejects.toThrow(/avíos.*100/i);
+  });
+
+  it('rejects deliveries when confection supplies are not prepared', async () => {
+    assignments.findOne.mockResolvedValue({
+      id: 'assignment-1', status: ConfectionAssignmentStatus.EN_CONFECCION,
+      quantity: 10, deliveredQuantity: 0, deliveries: [], orderPart: { id: 'part-1', quantity: 10 },
+    });
+    parts.findOne.mockResolvedValue({
+      id: 'part-1', quantity: 10, supplies: [{ quantityAvailable: 0, quantityNeeded: 10, supply: { id: 'supply-1', category: 'CONFECCION' } }],
+      order: { article: { supplies: [{ quantity: 1, supply: { id: 'supply-1', category: 'CONFECCION' } }] } },
+    });
+
+    await expect(service.registerDelivery('assignment-1', { quantity: 2 }, { id: 'user-1', role: 'ADMIN' } as never))
+      .rejects.toThrow(/avíos/i);
+    expect(deliveries.save).not.toHaveBeenCalled();
+  });
+
   it('rejects deliveries that exceed the assigned quantity', async () => {
     assignments.findOne.mockResolvedValue({
       id: 'assignment-1', status: ConfectionAssignmentStatus.EN_CONFECCION,
-      quantity: 10, deliveredQuantity: 9, deliveries: [],
+      quantity: 10, deliveredQuantity: 9, deliveries: [], orderPart: { id: 'part-1', quantity: 10 },
     });
 
     await expect(service.registerDelivery('assignment-1', { quantity: 2 }, { id: 'user-1', role: 'ADMIN' } as never))

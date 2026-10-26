@@ -9,7 +9,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, ILike, In, Repository } from 'typeorm';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { Article } from '../articles/entities/article.entity';
-import { OrderFabricUseType, SectorCode } from '../catalog/entities/catalog.enums';
+import { OrderFabricUseType, SectorCode, StageExecutionType } from '../catalog/entities/catalog.enums';
+import { Stage } from '../catalog/entities/stage.entity';
+import { PartStageEvent } from './entities/part-stage-event.entity';
 import { Fabric } from '../catalog/entities/fabric.entity';
 import { SizeCurveValue } from '../catalog/entities/size-curve-value.entity';
 import { SizeCurve } from '../catalog/entities/size-curve.entity';
@@ -138,6 +140,12 @@ export class OrdersService {
     });
 
     const saved = await this.ordersRepository.save(order);
+    const corteStage = await this.ordersRepository.manager.getRepository(Stage).findOneBy({ code: SectorCode.CORTE });
+    if (!corteStage) throw new NotFoundException('Etapa Corte no encontrada');
+    saved.parts[0].status = PartStatus.EN_PROCESO;
+    saved.parts[0].currentStage = corteStage;
+    await this.orderPartsRepository.save(saved.parts[0]);
+    await this.ordersRepository.manager.getRepository(PartStageEvent).save({ orderPart: saved.parts[0], stage: corteStage, executionType: StageExecutionType.INTERNO, startedAt: new Date(), performedBy: createdBy, note: 'Corte iniciado automáticamente al crear la orden.' });
     await this.preloadPartSupplies(saved.parts[0], article);
     return this.findOne(saved.id);
   }
@@ -270,7 +278,8 @@ export class OrdersService {
           splitMode: dto.splitMode,
           isComponentBranch: dto.splitMode === PartSplitMode.COMPONENTE,
           splitReason: subPart.splitReason ?? null,
-          status: PartStatus.PENDIENTE,
+          status: parent.currentStage ? PartStatus.EN_PROCESO : PartStatus.PENDIENTE,
+          currentStage: parent.currentStage ?? null,
         });
       }),
     );
