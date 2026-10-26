@@ -286,7 +286,7 @@ export class DashboardService {
 
   private statusLabel(status: PartStatus): string {
     const labels: Record<PartStatus, string> = {
-      [PartStatus.PENDIENTE]: 'Pendiente',
+      [PartStatus.PENDIENTE]: 'Sin asignacion',
       [PartStatus.EN_PROCESO]: 'En proceso',
       [PartStatus.DIVIDIDA]: 'Corte dividido',
       [PartStatus.REINTEGRADA]: 'Reintegrada',

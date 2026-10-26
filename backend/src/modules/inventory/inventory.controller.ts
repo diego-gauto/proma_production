@@ -29,6 +29,11 @@ export class InventoryController {
     return this.inventoryService.findProviders(query);
   }
 
+  @Get('providers/:id')
+  findProvider(@Param('id') id: string) {
+    return this.inventoryService.findProvider(id);
+  }
+
   @Patch('providers/:id')
   @Roles(UserRole.ADMIN)
   @Permissions({ action: PermissionAction.ADMINISTRAR })

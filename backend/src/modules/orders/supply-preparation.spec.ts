@@ -19,13 +19,15 @@ describe('Avíos paralelos y cierre de sectores', () => {
   let prepared: number;
   let category: string;
   let save: jest.Mock;
+  let cutQuantity: number;
   beforeEach(async () => {
     sector = SectorCode.CONFECCION;
     prepared = 0;
+    cutQuantity = 10;
     category = 'CONFECCION';
     save = jest.fn(async value => value);
     const supply = () => ({ id: 'supply', quantityNeeded: 20, quantityAvailable: prepared, completeness: 'COMPLETO', supply: { id: 'button', category } });
-    const part = () => ({ id: 'part', quantity: 10, status: 'EN_PROCESO', supplies: [supply()], order: { id: 'order', article: { supplies: [{ quantity: '2', supply: { id: 'button', category } }] } } });
+    const part = () => ({ id: 'part', quantity: 10, status: 'EN_PROCESO', cutLoads: [{ fabricUseType: 'PRIMARIA', items: [{ quantity: cutQuantity }] }], supplies: [supply()], order: { id: 'order', article: { supplies: [{ quantity: '2', supply: { id: 'button', category } }] } } });
     const event = () => ({ id: 'event', stage: { code: sector }, executionType: StageExecutionType.INTERNO });
     const module = await Test.createTestingModule({ providers: [StageEventsService,
       ...[OrderPart, Order, PartStageEvent, Stage, Workshop, User].map(entity => ({ provide: getRepositoryToken(entity), useValue: {
@@ -35,6 +37,13 @@ describe('Avíos paralelos y cierre de sectores', () => {
       } }))] }).compile();
     service = module.get(StageEventsService);
   });
+  it('no permite finalizar Corte si la cantidad cortada es parcial', async () => {
+    cutQuantity = 8;
+    sector = SectorCode.CORTE;
+    await expect(service.finish('part', {}, user)).rejects.toThrow(/corte es parcial/i);
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it('no permite cerrar Confección sin cantidades aunque el cliente mande COMPLETO', async () => {
     await expect(service.finish('part', {}, user)).rejects.toThrow(/avíos/i);
     expect(save).not.toHaveBeenCalled();

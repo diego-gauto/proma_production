@@ -18,6 +18,7 @@ import { AddArticleDecorationDetails1791055900000 } from './migrations/179105590
 import { AddFabricUseTypeAndConsumptionUnit1791056300000 } from './migrations/1791056300000-AddFabricUseTypeAndConsumptionUnit';
 import { AddPartDecorationLoads1791056200000 } from './migrations/1791056200000-AddPartDecorationLoads';
 import { AddPartCutLoads1791056100000 } from './migrations/1791056100000-AddPartCutLoads';
+import { CreateConfectionAssignments1791056500000 } from './migrations/1791056500000-CreateConfectionAssignments';
 
 config({ path: ['.env.local', '.env'] });
 
@@ -45,5 +46,6 @@ export default new DataSource({
     AddPartDecorationLoads1791056200000,
     AddFabricUseTypeAndConsumptionUnit1791056300000,
     AddDecorationLoadGarmentParts1791056400000,
+    CreateConfectionAssignments1791056500000,
   ],
 });

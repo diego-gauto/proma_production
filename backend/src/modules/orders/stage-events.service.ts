@@ -23,9 +23,11 @@ import { OrderStatus, PartSplitMode, PartStatus } from './entities/order.enums';
 import { PartStageEvent } from './entities/part-stage-event.entity';
 import { SupplyCategory } from '../catalog/entities/catalog.enums';
 
+type PublicStageEvent = Omit<PartStageEvent, 'performedBy'> & { performedBy: Pick<User, 'id' | 'fullName' | 'email' | 'role'> | null };
+
 type FinishResult = {
-  event: PartStageEvent;
-  includedAtraqueEvent?: PartStageEvent | null;
+  event: PublicStageEvent;
+  includedAtraqueEvent?: PublicStageEvent | null;
 };
 
 @Injectable()
@@ -49,7 +51,7 @@ export class StageEventsService {
     partId: string,
     dto: StartStageDto,
     currentUser: AuthenticatedUser,
-  ): Promise<PartStageEvent> {
+  ): Promise<PublicStageEvent> {
     const [part, stage, user] = await Promise.all([
       this.findPart(partId),
       this.findStage(dto.stageId),
@@ -130,6 +132,10 @@ export class StageEventsService {
       active.stage.code,
       PermissionAction.FINALIZAR_ETAPA,
     );
+
+    if (active.stage.code === SectorCode.CORTE) {
+      await this.ensureCutComplete(part);
+    }
 
     if (active.stage.code === SectorCode.BORDADO || active.stage.code === SectorCode.ESTAMPADO) {
       await this.ensureDecorationPartsComplete(part.id, active.stage.code);
@@ -271,6 +277,20 @@ export class StageEventsService {
     }
   }
 
+  private async ensureCutComplete(part: OrderPart): Promise<void> {
+    const loaded = await this.partsRepository.findOne({
+      where: { id: part.id },
+      relations: { cutLoads: { items: true } },
+    });
+    const cutQuantity = (loaded?.cutLoads ?? []).flatMap((load) => load.items ?? [])
+      .reduce((total, item) => total + item.quantity, 0);
+    if (cutQuantity < part.quantity) {
+      throw new BadRequestException(
+        `No se puede finalizar Corte: el corte es parcial (${cutQuantity}/${part.quantity})`,
+      );
+    }
+  }
+
   private async ensureDecorationPartsComplete(partId: string, sector: SectorCode): Promise<void> {
     const part = await this.partsRepository.findOne({
       where: { id: partId },
@@ -353,7 +373,7 @@ export class StageEventsService {
     return user;
   }
 
-  private async findEvent(id: string): Promise<PartStageEvent> {
+  private async findEvent(id: string): Promise<PublicStageEvent> {
     const event = await this.eventsRepository.findOne({
       where: { id },
       relations: {
@@ -366,6 +386,10 @@ export class StageEventsService {
     if (!event) {
       throw new NotFoundException('Evento no encontrado');
     }
-    return event;
+    const { performedBy, ...safeEvent } = event;
+    return {
+      ...safeEvent,
+      performedBy: performedBy ? { id: performedBy.id, fullName: performedBy.fullName, email: performedBy.email, role: performedBy.role } : null,
+    };
   }
 }

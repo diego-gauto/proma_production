@@ -1,8 +1,8 @@
 "use client";
 
 import { SupplyWorkspace, isSupplySectorUser } from "../components/ordenes/SupplyWorkspace/SupplyWorkspace";
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { Fragment, FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/ui/Button/Button";
 import { AppTopBar, AppTopBarSection } from "../components/layout/AppTopBar/AppTopBar";
 import { Input } from "../components/ui/Input/Input";
@@ -22,6 +22,7 @@ import {
 import {
   ArticleMaster,
   ClientMaster,
+  ContactMaster,
   createMaster,
   deleteMaster,
   FabricMaster,
@@ -119,9 +120,10 @@ function viewStateFromPath(pathname: string): { view: MainView; resource?: Maste
 }
 
 
-export default function Home() {
+function HomeContent() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<LoginResponse | null>(null);
   const [mainView, setMainView] = useState<MainView>("orders");
   const [active, setActive] = useState<MasterName>("clients");
@@ -151,6 +153,7 @@ export default function Home() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [movingPartId, setMovingPartId] = useState<string | null>(null);
   const [sectorDisplayMode, setSectorDisplayMode] = useState<"list" | "cards">("cards");
+  const [sectorFilter, setSectorFilter] = useState<string | null>(null);
 
   const clearStoredSession = useCallback((message?: string) => {
     window.localStorage.removeItem("proma-session");
@@ -197,9 +200,10 @@ export default function Home() {
       setActive(routeState.resource);
     }
     setSearch("");
+    setSectorFilter(routeState.view === "sectors" ? searchParams.get("stage") : null);
     setError("");
     setModalItem(null);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   const navigateToView = useCallback((view: MainView, resource: MasterName = active) => {
     router.push(pathForView(view, resource));
@@ -251,8 +255,10 @@ export default function Home() {
         getDashboardKanban(session.accessToken, nextSearch),
         getDashboardSummary(session.accessToken, nextSearch),
       ]);
-      setOrders(rows.items);
-      setKanban(board);
+      const filteredBoard = sectorFilter ? { ...board, stages: board.stages.filter((column) => column.stage.code === sectorFilter) } : board;
+      const filteredRows = sectorFilter ? rows.items.filter((row) => row.stage?.code === sectorFilter) : rows.items;
+      setOrders(filteredRows);
+      setKanban(filteredBoard);
       setSummary(totals);
     } catch (err) {
       if (isUnauthorizedError(err)) {
@@ -263,7 +269,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [clearStoredSession, search, session]);
+  }, [clearStoredSession, search, sectorFilter, session]);
 
   useEffect(() => {
     if (session && (mainView === "orders" || mainView === "sectors")) {
@@ -492,7 +498,7 @@ export default function Home() {
         <header className={styles.heroHeader}>
           <div>
             <p className={styles.breadcrumb}>Producción / {mainView === "masters" ? "Gestión" : mainView === "stock" ? "Stock" : mainView === "sectors" ? "Sectores" : "Vista general"} · {formatTodayLabel()}</p>
-            <h1>{mainView === "masters" ? "Gestión" : mainView === "stock" ? "Stock" : mainView === "sectors" ? "Sectores" : "Órdenes de corte"}</h1>
+            <h1>{mainView === "masters" ? "Gestión" : mainView === "stock" ? "Stock" : mainView === "sectors" ? (kanban.stages[0]?.stage.name ?? "Sectores") : "Órdenes de corte"}</h1>
           </div>
           {mainView === "sectors" ? (
             <div className={styles.viewToggle}>
@@ -592,6 +598,7 @@ export default function Home() {
             movingPartId={movingPartId}
             sectorDisplayMode={sectorDisplayMode}
             onNewOrder={() => router.push("/ordenes/nueva")}
+            onSectorOpen={(code) => router.push("/sectores?stage=" + code)}
           />
         ) : mainView === "stock" ? (
           <StockView
@@ -632,7 +639,7 @@ export default function Home() {
               columns={buildColumns(active)}
               items={items}
               emptyText={activeResource.empty}
-              onRowClick={setModalItem}
+              onRowClick={(active === "clients" || active === "providers" || active === "workshops") ? (item) => router.push("/gestion/" + active + "/" + item.id) : setModalItem}
             />
             <Pagination
               page={itemsPage}
@@ -1188,6 +1195,7 @@ function OrdersView({
   movingPartId,
   sectorDisplayMode,
   onNewOrder,
+  onSectorOpen,
 }: {
   mode: "orders" | "sectors";
   orders: DashboardRow[];
@@ -1198,6 +1206,7 @@ function OrdersView({
   movingPartId: string | null;
   sectorDisplayMode: "list" | "cards";
   onNewOrder: () => void;
+  onSectorOpen: (code: string) => void;
 }) {
   const [expandedSectors, setExpandedSectors] = useState<Record<number, boolean>>({});
 
@@ -1338,7 +1347,7 @@ function OrdersView({
                 }}
               >
                 <header>
-                  <strong>{column.stage.name}</strong>
+                  <button type="button" className={styles.sectorTitleButton} onClick={() => onSectorOpen(column.stage.code)}>{column.stage.name}</button>
                   <span>{column.parts.length}</span>
                 </header>
                 <div className={styles.kanbanCards}>
@@ -1573,7 +1582,7 @@ function statusText(row: DashboardRow): string {
 
 function partStatusText(status: string): string {
   if (status === "EN_PROCESO") return "En proceso";
-  if (status === "PENDIENTE") return "Pendiente";
+  if (status === "PENDIENTE") return "Sin asignación";
   if (status === "FINALIZADA") return "Finalizada";
   if (status === "DIVIDIDA") return "Dividida";
   if (status === "REINTEGRADA") return "Reintegrada";
@@ -1944,6 +1953,15 @@ function buildColumns(resource: MasterName) {
     render: () => <span className={styles.rowChevron} aria-hidden="true">›</span>,
   };
 
+  if (resource === "clients") {
+    return [
+      { key: "client", label: "Cliente", render: (item: MasterItem) => { const client = item as ClientMaster; return <div className={styles.stackedCell}><span className={styles.cellPrimary}>{client.businessName}</span><span className={styles.cellSecondary}>{client.taxId || "Sin CUIT/CUIL"}</span></div>; } },
+      { key: "address", label: "Dirección", render: (item: MasterItem) => { const client = item as ClientMaster; return <div className={styles.stackedCell}><span className={styles.cellPrimary}>{formatStreetAddress(client)}</span><span className={styles.cellSecondary}>{formatLocation(client) || "Sin localidad"}</span></div>; } },
+      { key: "contacts", label: "Contactos", render: (item: MasterItem) => { const contacts = (item as ClientMaster).contacts ?? []; return contacts.length > 0 ? <div className={styles.stackedCell}>{contacts.map((contact) => <span className={styles.contactLine} key={contact.id || contact.contactName}><span className={styles.cellPrimary}>{contact.contactName}</span><span className={styles.cellSecondary}>{contact.roleNote || "Sin cargo"}</span><span className={styles.cellSecondary}>{contact.mobilePhone1 || contact.fixedPhone || "Sin teléfono"}</span></span>)}</div> : <span className={styles.cellSecondary}>Sin contactos</span>; } },
+      chevron,
+    ];
+  }
+
   if (resource === "users") {
     return [
       { key: "name", label: "Nombre", render: (item: MasterItem) => (item as UserMaster).fullName },
@@ -1958,8 +1976,8 @@ function buildColumns(resource: MasterName) {
     return [
       { key: "businessName", label: "Proveedor", render: (item: MasterItem) => (item as ProviderMaster).businessName },
       { key: "tax", label: "CUIT/CUIL", render: (item: MasterItem) => (item as ProviderMaster).taxId ?? "Sin dato" },
-      { key: "address", label: "Dirección", render: (item: MasterItem) => formatFullAddress(item as ProviderMaster) },
-      { key: "contacts", label: "Contacto", render: (item: MasterItem) => formatContacts((item as ProviderMaster).contacts) },
+      { key: "address", label: "Dirección", render: (item: MasterItem) => <div className={styles.stackedCell}><span className={styles.cellPrimary}>{formatStreetAddress(item as ProviderMaster)}</span><span className={styles.cellSecondary}>{formatLocation(item as ProviderMaster)}</span></div> },
+      { key: "contacts", label: "Contacto", render: (item: MasterItem) => renderContactStack((item as ProviderMaster).contacts) },
       { key: "status", label: "Estado", render: (item: MasterItem) => statusBadge((item as ProviderMaster).isActive) },
       chevron,
     ];
@@ -2000,8 +2018,8 @@ function buildColumns(resource: MasterName) {
       { key: "name", label: "Taller", render: (item: MasterItem) => (item as WorkshopMaster).name },
       { key: "type", label: "Tipo", render: (item: MasterItem) => formatList((item as WorkshopMaster).specialties) },
       { key: "specialty", label: "Especialidad", render: (item: MasterItem) => (item as WorkshopMaster).specialtyDetail ?? "Sin especificar" },
-      { key: "address", label: "Dirección", render: (item: MasterItem) => formatFullAddress(item as WorkshopMaster) },
-      { key: "contacts", label: "Contacto", render: (item: MasterItem) => formatContacts((item as WorkshopMaster).contacts) },
+      { key: "address", label: "Dirección", render: (item: MasterItem) => <div className={styles.stackedCell}><span className={styles.cellPrimary}>{formatStreetAddress(item as WorkshopMaster)}</span><span className={styles.cellSecondary}>{formatLocation(item as WorkshopMaster)}</span></div> },
+      { key: "contacts", label: "Contacto", render: (item: MasterItem) => renderContactStack((item as WorkshopMaster).contacts) },
       chevron,
     ];
   }
@@ -2587,8 +2605,20 @@ function statusBadge(isActive: boolean) {
   return <span className={isActive ? styles.masterStatusActive : styles.masterStatusInactive}>{isActive ? "Activo" : "Inactivo"}</span>;
 }
 
-function formatFullAddress(item: { address?: string | null; locality?: string | null; district?: string | null; province?: string | null }): string {
-  return [item.address, item.locality, item.district, item.province].filter(Boolean).join(" / ") || "Sin dirección";
+function formatFullAddress(item: { address?: string | null; street?: string | null; streetNumber?: string | null; locality?: string | null; district?: string | null; province?: string | null }): string {
+  return [item.address || [item.street, item.streetNumber].filter(Boolean).join(" "), item.locality, item.district, item.province].filter(Boolean).join(" / ") || "Sin dirección";
+}
+
+function formatStreetAddress(item: { address?: string | null; street?: string | null; streetNumber?: string | null; floorApartment?: string | null }): string {
+  return [item.address || [item.street, item.streetNumber].filter(Boolean).join(" "), item.floorApartment].filter(Boolean).join(" · ") || "Sin dirección";
+}
+
+function formatLocation(item: { locality?: string | null; district?: string | null; province?: string | null }): string {
+  return [item.locality, item.district, item.province].filter(Boolean).join(" / ");
+}
+
+function renderContactStack(contacts?: ContactMaster[]) {
+  return contacts && contacts.length > 0 ? <div className={styles.stackedCell}>{contacts.map((contact) => <span className={styles.contactLine} key={contact.id || contact.contactName}><span className={styles.cellPrimary}>{contact.contactName}</span><span className={styles.cellSecondary}>{contact.roleNote || "Sin cargo"}</span><span className={styles.cellSecondary}>{contact.mobilePhone1 || contact.fixedPhone || "Sin teléfono"}</span></span>)}</div> : <span className={styles.cellSecondary}>Sin contactos</span>;
 }
 
 function formatContacts(contacts?: { contactName: string; mobilePhone1?: string | null; fixedPhone?: string | null }[]): string {
@@ -2621,4 +2651,13 @@ function formatArticleSuppliesInput(supplies?: { quantity?: string | null; note?
 
 function formatDecorationInput(parts?: { garmentPart: string; decorationType: string }[]): string {
   return (parts ?? []).map((part) => `${part.garmentPart}:${part.decorationType}`).join("; ");
+}
+
+
+export default function Home() {
+  return (
+    <Suspense fallback={<main />}>
+      <HomeContent />
+    </Suspense>
+  );
 }

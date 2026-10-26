@@ -1,34 +1,25 @@
-# Plan - Proveedores, stock inicial y ajustes ABM
+# Auditoría funcional del recorrido de producción
 
 ## Objetivo
-Actualizar modelo y vistas ABM para reflejar que telas y avios son entidades puras, proveedores son entidad propia, y los ingresos de stock vinculan proveedor + material. Para telas, el stock se compone de rollos con codigo y lote.
+Verificar con datos reales el recorrido completo desde altas y stock hasta Corte, Bordado, Estampado, Avíos y Confección, sin implementar nuevas reglas hasta conocer los resultados.
 
 ## Fases
-1. Relevar modelo/API actual y definir cambios minimos compatibles. status: complete
-2. Backend: migracion, entidades, DTOs/servicios/controladores/tests para proveedores e ingresos/rollos. status: complete
-3. Frontend: columnas ABM, nuevo recurso Proveedores, paginacion, perfil/logout y ajustes de header/listados. status: complete
-4. Docs: actualizar PRD y plan de implementacion. status: complete
-5. Verificacion: build/test backend+frontend y smoke local. status: complete
+- [ ] Preparar entorno y datos de prueba trazables.
+- [ ] Verificar altas de cliente, tela, stock, artículo y taller.
+- [ ] Verificar creación de orden y fechas por etapa.
+- [ ] Verificar escenarios de tela: faltante, parcial y completa.
+- [~] Verificar corte parcial, corte terminado y disponibilidad para Confección. Cierre parcial corregido y probado; falta continuar el recorrido completo.
+- [ ] Verificar Bordado, Estampado y Avíos, incluyendo bloqueos y paralelismo.
+- [ ] Verificar asignación, envío y entregas parciales de Confección.
+- [ ] Consolidar fallas, reglas faltantes y propuesta de implementación.
 
-## Decisiones
-- Sin precio por ahora.
-- Proveedor no va dentro de tela/avio.
-- Tela stock se modela por rollos. Cada rollo guarda codigo y lote por ahora.
-- Avios tendran ingresos con cantidad, sin proveedor embebido en el maestro.
+## Restricciones
+- No hacer commit durante la auditoría.
+- No marcar un caso como correcto solo por HTTP 200 o por compilación.
+- Cada caso debe tener evidencia de API y, cuando corresponda, de pantalla.
 
-## Errores
-- Test rojo inicial correcto: fabrics aceptaba supplier directo.
-- Backend unitario fallo por seed demo con supplier; corregido.
-- API providers devolvio 500 por TypeORM con leftJoin + skip/take; corregido con findAndCount.
-
-
----
-
-# Avíos — plan de trabajo
-1. Contexto y preservación: rama feature/avios-sector desde develop (mismo HEAD); copia previa en /tmp/proma-before-avios-20261015.tar.gz. Cambios anteriores conservados explícitamente.
-2. Implementar preparación paralela por categoría, cantidades y estados con tests primero.
-3. Implementar listado/detalle con estilos de Corte, permisos y paginación.
-4. Validar cierres de Confección/Terminación y Ojal y Botón según clasificación confirmada.
-5. Ejecutar tests, tipos, e2e, migraciones si corresponden y navegador localhost:3000.
-
-Pendiente de respuesta: clasificación explícita de avíos necesarios para Ojal y Botón.
+## Errores encontrados
+| Error | Intento | Resolución |
+| Corte parcial puede finalizarse y deja la parte `PENDIENTE` sin etapa | 1 | Pendiente de corrección y nueva prueba |
+| Respuesta de asignación incluye `assignedBy.passwordHash` | 1 | Pendiente de corrección y nueva prueba |
+|---|---:|---|

@@ -269,3 +269,7 @@ export class RepairOrderDto {
   @MaxLength(500)
   note!: string;
 }
+
+export class AssignConfectionDto { @IsUUID() workshopId!: string; @IsOptional() @IsString() note?: string; }
+export class SendConfectionDto { @IsOptional() @IsString() note?: string; }
+export class RegisterConfectionDeliveryDto { @Type(() => Number) @IsInt() @Min(1) quantity!: number; @IsOptional() @IsDateString() deliveredAt?: string; @IsOptional() @IsString() note?: string; }

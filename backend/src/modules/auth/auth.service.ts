@@ -21,10 +21,13 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string): Promise<LoginResult> {
-    const user = await this.usersRepository.findOne({
-      where: { email, isActive: true },
-      relations: { permissions: true },
-    });
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.permissions', 'permission')
+      .addSelect('user.passwordHash')
+      .where('user.email = :email', { email })
+      .andWhere('user.isActive = :isActive', { isActive: true })
+      .getOne();
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Credenciales inválidas');
