@@ -1,0 +1,6 @@
+export enum ConfectionAssignmentStatus {
+  SIN_ASIGNACION = 'SIN_ASIGNACION',
+  ASIGNADO = 'ASIGNADO',
+  EN_CONFECCION = 'EN_CONFECCION',
+  TERMINADO = 'TERMINADO',
+}
